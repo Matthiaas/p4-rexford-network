@@ -10,26 +10,41 @@ from pickle import loads, dumps
 
 from errors import *
 
-def load_link_fail_map(links_fail_file):
-    """
-        Args:
-            links_fail_file:path to link_fail.json
-        Returns:
-            Array of JSON. "failures" is converted to a set for ease of lookup
-    """
-    with open(links_fail_file, 'r') as f:
-        data = json.load(f)
-        return [{"failures":set(x["failures"]),"routing_tbl":x["routing_tbl"]} for x in data["map"]]
-
 class Fast_Recovery_Manager(object):
 
+    @staticmethod
+    def parse_failures(failures):
+        """
+        Takes failures like ["s1-s2", "s2-s3"] and returns [(s1,s2),(s2,s3)]
+        """
+        f = []
+        for link in failures:
+            nodes = link.split("-")
+            f.append((nodes[0],nodes[1]))
+        return f
+    
+    def load_link_fail_map(self,links_fail_file):
+        """
+            Args:
+                links_fail_file:path to link_fail.json
+            Returns:
+                Array of JSON. "failures" is converted to a set for ease of lookup
+        """
+        with open(links_fail_file, 'r') as f:
+            data = json.load(f)
+            f = []
+            for link in data["failures"]:
+                nodes = link.split("-")
+                f.append((nodes[0],nodes[1]))
+            return [{"failures":set(self.parse_failures(x["failures"])),"routing_tbl":x["routing_tbl"]} for x in data["map"]]
+    
     def __init__(self, topo: Graph, links_fail_file: str):
         
         if not os.path.exists(links_fail_file):
             print("[!] link_fail_map not found")
             raise FileNotFound()
 
-        self.fail_map = load_link_fail_map(links_fail_file)
+        self.fail_map = self.load_link_fail_map(self,links_fail_file)
         #example of access to the structure
         #print(fail_map[0]["failures"])
         #print(fail_map[0]["routing_tbl"]["switch1"]["host1"])
@@ -38,6 +53,7 @@ class Fast_Recovery_Manager(object):
         self.hosts = self.topo.get_hosts()
         self.failures = set()
 
+    
     def query_map(self, failures):
         """
             Query the failure map given the failures to recover the state that should be applied
@@ -60,13 +76,13 @@ class Fast_Recovery_Manager(object):
             failures (list(tuple(str, str))): List of failed links.
 
         Returns:
-            dict{str, dict{str: [(str, int, str)]}} -> dict{switch, 
-                                                                dict
-                                                                    {host: 
-                                                                        [
-                                                                            (primary_nh, port, mac),
-                                                                            (secondary_nh,port,mac)
-                                                                        ]
+            dict{str, dict{str: [(str, int, str)]}} -> dict{switch:
+                                                                    dict{
+                                                                        host: 
+                                                                            [
+                                                                                (primary_nh, port, mac),
+                                                                                (secondary_nh,port,mac)
+                                                                            ]
                                                                     }
                                                                 }
         
@@ -160,6 +176,7 @@ class Fast_Recovery_Manager(object):
                 switch_results.append((host, nexthop))
 
         return results
+
     @staticmethod
     def compute_lfas(graph: Graph, switches, hosts, distances, nexthops, failures=None):
         """Compute LFA (loop-free alternates) for all nexthops."""
@@ -201,11 +218,7 @@ class Fast_Recovery_Manager(object):
             data = json.load(f)
             all_failures = []
             for failures in data["failures"]:
-                f = []
-                for link in failures:
-                    nodes = link.split("-")
-                    f.append((nodes[0],nodes[1]))
-                all_failures.append(f)
+                all_failures.append(Fast_Recovery_Manager.parse_failures(failures))
             return all_failures
     
     @staticmethod
@@ -233,6 +246,7 @@ class Fast_Recovery_Manager(object):
                                     # no lfa
                                     lfa = ""
                                 routing_tbl[sw][host].append(lfa)
+                #how should we write down failures? Like node1-node2 or as tuple/array [node1, node2]
                 scenario = {"failures":[x[0]+"-"+x[1] for x in failures], "routing_tbl":routing_tbl}
                 scenarios.append(scenario)
             map["map"] = scenarios
