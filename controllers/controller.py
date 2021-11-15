@@ -7,7 +7,7 @@ class Controller(object):
 
     def __init__(self, base_traffic):
         self.base_traffic_file = base_traffic
-        self.topo = load_topo('topology.json')
+        self.topo = load_topo('example_topology.json')
         self.controllers = {}
         self.recovery_manager = FRM(self.topo, 'example_link_failure_map.json') 
         self.init()

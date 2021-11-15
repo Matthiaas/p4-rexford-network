@@ -1,6 +1,8 @@
 """ Define classes and methods for links failure recovery here"""
 from networkx.algorithms import all_pairs_dijkstra
+from networkx.algorithms.shortest_paths.generic import shortest_path
 from p4utils.utils.topology import NetworkGraph as Graph
+from p4utils.utils.helper import load_topo
 from scapy.all import *
 import json
 import os
@@ -202,17 +204,19 @@ class Fast_Recovery_Manager(object):
                 f = []
                 for link in failures:
                     nodes = link.split("-")
-                    f.append(tuple(nodes[0],nodes[1]))
+                    f.append((nodes[0],nodes[1]))
                 all_failures.append(f)
             return all_failures
     
     @staticmethod
-    def precompute_routing(graph: Graph, switches, hosts, all_failures=None):
+    def precompute_routing(graph: Graph, switches, hosts, all_failures=[]):
         with open("example_link_failure_map_generated.json",'w') as f:
-            map = {"map": []}
+            map = {"map": [] ,"_comment": []}
             scenarios = []
+            if len(all_failures)==0:
+                all_failures = [None]
             for failures in all_failures:
-                shortest_paths, distances = Fast_Recovery_Manager.dijkstra(graph, failures)
+                distances, shortest_paths = Fast_Recovery_Manager.dijkstra(graph, failures)
                 nexthops = Fast_Recovery_Manager.compute_nexthops(shortest_paths, switches, hosts, failures)
                 lfas = Fast_Recovery_Manager.compute_lfas(graph, switches, hosts, distances, nexthops, failures)
                 routing_tbl = {}
@@ -223,8 +227,19 @@ class Fast_Recovery_Manager(object):
                         for h, nh in nexthops[sw]:
                             if h == host:
                                 routing_tbl[sw][host].append(nh)
-                                routing_tbl[sw][host].append(lfas[sw][host])
-                scenario = {"failures":failures, "routing_tbl":routing_tbl}
+                                try:
+                                    lfa = lfas[sw][host]
+                                except:
+                                    # no lfa
+                                    lfa = ""
+                                routing_tbl[sw][host].append(lfa)
+                scenario = {"failures":[x[0]+"-"+x[1] for x in failures], "routing_tbl":routing_tbl}
                 scenarios.append(scenario)
-            json.dumps(map, f)
+            map["map"] = scenarios
+            json.dump(map, f)
+    
 #recovery = Fast_Recovery_Manager('example_link_failure_map.json')
+if __name__=="__main__":
+    graph = load_topo("/home/p4/13_rexford/controllers/example_topology.json")
+    all_failures = Fast_Recovery_Manager.load_failures('failures.json')
+    Fast_Recovery_Manager.precompute_routing(graph, graph.get_p4switches().keys(), graph.get_hosts().keys(), all_failures)
