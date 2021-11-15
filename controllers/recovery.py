@@ -4,6 +4,7 @@ from p4utils.utils.topology import NetworkGraph as Graph
 from scapy.all import *
 import json
 import os
+from pickle import loads, dumps
 
 from errors import *
 
@@ -93,11 +94,41 @@ class Fast_Recovery_Manager(object):
         #Get the lfa for host from switch given nexthops=load_nexthops_and_lfas()
         return nexthops[switch][host][1]
 
+    ##############################
+    #                            #                           
+    # Methods for precomputation #                           
+    #                            #
+    ##############################
     """
     compute_nexthops and compute_lfas should be called before runtime, i.e used
     to build the links_fail_file.json structure
     """
-    def compute_nexthops(self, failures=None):
+    # used before runtime
+    @staticmethod
+    def dijkstra(graph, failures=None):
+        """Compute shortest paths and distances.
+
+        Args:
+            failures (list(tuple(str, str))): List of failed links.
+
+        Returns:
+            tuple(dict, dict): First dict: distances, second: paths.
+        """
+        if failures is not None:
+            graph = graph.copy()
+            for failure in failures:
+                graph.remove_edge(*failure)
+
+        # Compute the shortest paths from switches to hosts.
+        dijkstra = dict(all_pairs_dijkstra(graph, weight='weight'))
+
+        distances = {node: data[0] for node, data in dijkstra.items()}
+        paths = {node: data[1] for node, data in dijkstra.items()}
+
+        return distances, paths
+
+    @staticmethod
+    def compute_nexthops(shortest_paths, switches, hosts, failures=None):
         """Compute the best nexthops for all switches to each host.
 
         Optionally, a link can be marked as failed. This link will be excluded
@@ -107,37 +138,34 @@ class Fast_Recovery_Manager(object):
             failures (list(tuple(str, str))): List of failed links.
 
         Returns:
-            dict(str, list(str, str, int))):
-                Mapping from all switches to subnets, MAC, port.
+            dict(str, list(str, str))):
+                Mapping from all switches to [host,nexthop].
         """
-        # Compute the shortest paths from switches to hosts.
-        all_shortest_paths = self.dijkstra(failures=failures)[1]
 
         # Translate shortest paths to mapping from host to nexthop node
         # (per switch).
         results = {}
-        for switch in self.switches:
+        for switch in switches:
             switch_results = results[switch] = []
-            for host in self.hosts:
+            for host in hosts:
                 try:
-                    path = all_shortest_paths[switch][host]
+                    path = shortest_paths[switch][host]
                 except KeyError:
                     print("WARNING: The graph is not connected!")
                     print("'%s' cannot reach '%s'." % (switch, host))
-                    continue
+                    raise NotConnected()
                 nexthop = path[1]  # path[0] is the switch itself.
                 switch_results.append((host, nexthop))
 
         return results
-    
-    def compute_lfas(self, nexthops, failures=None):
+    @staticmethod
+    def compute_lfas(graph: Graph, switches, hosts, distances, nexthops, failures=None):
         """Compute LFA (loop-free alternates) for all nexthops."""
         lfas = {}
-        distances = self.dijkstra(failures=failures)[0]
         #for every switch...
         for sw, destinations in nexthops.items():
             lfas[sw] = {}
-            neighs = set(self.topo.get_p4switches_connected_to(sw))
+            neighs = set(graph.get_p4switches_connected_to(sw))
             #for every host we want to reach
             for host, nexthop in destinations:
                 if nexthop == host:
@@ -164,29 +192,39 @@ class Fast_Recovery_Manager(object):
                 lfas[sw][host] = min(loop_free, key=lambda x: x[1])[0]
 
         return lfas
-
-    # used before runtime
-    def dijkstra(graph, failures=None):
-        """Compute shortest paths and distances.
-
-        Args:
-            failures (list(tuple(str, str))): List of failed links.
-
-        Returns:
-            tuple(dict, dict): First dict: distances, second: paths.
-        """
-        if failures is not None:
-            graph = graph.copy()
-            for failure in failures:
-                graph.remove_edge(*failure)
-
-        # Compute the shortest paths from switches to hosts.
-        dijkstra = dict(all_pairs_dijkstra(graph, weight='weight'))
-
-        distances = {node: data[0] for node, data in dijkstra.items()}
-        paths = {node: data[1] for node, data in dijkstra.items()}
-
-        return distances, paths
     
-
-recovery = Fast_Recovery_Manager('example_link_failure_map.json')
+    @staticmethod
+    def load_failures(all_fails: str):
+        with open(all_fails, 'r') as f:
+            data = json.load(f)
+            all_failures = []
+            for failures in data["failures"]:
+                f = []
+                for link in failures:
+                    nodes = link.split("-")
+                    f.append(tuple(nodes[0],nodes[1]))
+                all_failures.append(f)
+            return all_failures
+    
+    @staticmethod
+    def precompute_routing(graph: Graph, switches, hosts, all_failures=None):
+        with open("example_link_failure_map_generated.json",'w') as f:
+            map = {"map": []}
+            scenarios = []
+            for failures in all_failures:
+                shortest_paths, distances = Fast_Recovery_Manager.dijkstra(graph, failures)
+                nexthops = Fast_Recovery_Manager.compute_nexthops(shortest_paths, switches, hosts, failures)
+                lfas = Fast_Recovery_Manager.compute_lfas(graph, switches, hosts, distances, nexthops, failures)
+                routing_tbl = {}
+                for sw in switches:
+                    routing_tbl[sw] = {}
+                    for host in hosts:
+                        routing_tbl[sw][host] = []
+                        for h, nh in nexthops[sw]:
+                            if h == host:
+                                routing_tbl[sw][host].append(nh)
+                                routing_tbl[sw][host].append(lfas[sw][host])
+                scenario = {"failures":failures, "routing_tbl":routing_tbl}
+                scenarios.append(scenario)
+            json.dumps(map, f)
+#recovery = Fast_Recovery_Manager('example_link_failure_map.json')

@@ -2,13 +2,14 @@
 import argparse
 from p4utils.utils.helper import load_topo
 from p4utils.utils.sswitch_thrift_API import SimpleSwitchThriftAPI
-
+from recovery import Fast_Recovery_Manager as FRM
 class Controller(object):
 
     def __init__(self, base_traffic):
         self.base_traffic_file = base_traffic
         self.topo = load_topo('topology.json')
         self.controllers = {}
+        self.recovery_manager = FRM(self.topo, 'example_link_failure_map.json') 
         self.init()
 
     def init(self):
@@ -39,7 +40,6 @@ def get_args():
     parser.add_argument('--base-traffic', help='Path to scenario.base-traffic',
                         type=str, required=False, default='')
     return parser.parse_args()
-
 
 if __name__ == "__main__":
     args = get_args()

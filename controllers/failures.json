@@ -1,0 +1,6 @@
+{
+    "failures":[
+        ["host1-host2"],
+        ["host1-host2","host3-host4"]
+    ]
+}

@@ -5,3 +5,5 @@ class FileNotFound(Exception):
 
 class ScenarioNotFound(Exception):
     pass
+class NotConnected(Exception):
+    pass
