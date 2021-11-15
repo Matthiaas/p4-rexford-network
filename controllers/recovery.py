@@ -165,7 +165,7 @@ class Fast_Recovery_Manager(object):
 
         return lfas
 
-    #Probably not needed if we do it beforehand
+    # used before runtime
     def dijkstra(graph, failures=None):
         """Compute shortest paths and distances.
 
