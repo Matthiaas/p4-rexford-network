@@ -1,0 +1,39 @@
+{
+    "map":[
+            {
+                "failures":["Link1", "link2", "bla"],
+                "routing_tbl":[
+                    {
+                        "switch1":[
+                            {"host1": "next_hop1"},
+                            {"host2": "bla..."}
+                        ]
+                    },
+                    {
+                        "switch2":[
+                            {"host1": "bla..."}
+                        ]
+                    }
+                ]
+            },
+            {
+                "failures":[],
+                "routing_tbl":[
+                    {
+                        "switch1":[{"host1":[], "host2":[]}],
+                        "switch2":[]
+                    }
+                ]
+            }
+        ],
+    "_comment":[
+        "Ignore this JSON entry. Basically we could have one entry",
+        "called map, which contains an array of the following data stuct:",
+        "each entry is a JSON with 2 fields:",
+        "   a - failures -> array of the linked that failed",
+        "   b - routing_tbl -> array of JSONs",
+        "       b1 - each entry of b is a JSON with a field switchX which maps to a JSON",
+        "       b1.1 - each entry of b1 is a JSON with a field hostX mapping to the nexthop for hostX from switchX"
+    ]
+}
+
