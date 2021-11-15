@@ -4,11 +4,11 @@
                 "failures":["Link1", "link2", "bla"],
                 "routing_tbl":{
                         "switch1":{
-                                "host1": "next_hop1",
-                                "host2": "bla..."
+                                "host1": ["next_hop", "lfa"],
+                                "host2": ["bla..."]
                             },
                         "switch2":{
-                                "host1": "bla..."
+                                "host1": ["bla..."]
                             }
                     }
             },
@@ -16,11 +16,11 @@
                 "failures":["Link3", "link4", "bla"],
                 "routing_tbl":{
                         "switch1":{
-                                "host1": "next_hop1",
-                                "host2": "bla..."
+                                "host1": ["next_hop1"],
+                                "host2": ["bla..."]
                             },
                         "switch2":{
-                                "host1": "bla..."
+                                "host1": ["bla..."]
                             }
                 }
             }
@@ -32,7 +32,7 @@
         "   a - failures -> array of the linked that failed",
         "   b - routing_tbl -> JSON:",
         "       b1 - each field of b is a field switchX which maps to an array",
-        "       b1.1 - each entry of b1 is a JSON with a field hostX mapping to the nexthop for hostX from switchX"
+        "       b1.1 - each entry of b1 is a JSON with a field hostX mapping to the nexthop for hostX from switchX and the LFA"
     ]
 }
 

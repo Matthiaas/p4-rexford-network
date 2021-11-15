@@ -1,4 +1,7 @@
 """ Define custom exception here, maybe useful for debug?"""
 
-class FileNotFoundError(Exception):
+class FileNotFound(Exception):
+    pass
+
+class ScenarioNotFound(Exception):
     pass
