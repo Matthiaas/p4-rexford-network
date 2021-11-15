@@ -7,9 +7,13 @@ import os
 from errors import *
 
 def load_link_fail_map(links_fail_file):
+    """
+        Input: path to link_fail.json
+        Output: Array of JSON. "failures" is converted to a set for ease of lookup
+    """
     with open(links_fail_file, 'r') as f:
         data = json.load(f)
-        return data["map"]
+        return [{"failures":set(x["failures"]),"routing_tbl":x["routing_tbl"]} for x in data["map"]]
 
 class Fast_Recovery_Manager(object):
 
@@ -20,6 +24,8 @@ class Fast_Recovery_Manager(object):
             raise FileNotFoundError()
 
         fail_map = load_link_fail_map(links_fail_file)
-        print(fail_map[0]["routing_tbl"]["switch1"]["host1"])
+        #example of access to the structure
+        #print(fail_map[0]["failures"])
+        #print(fail_map[0]["routing_tbl"]["switch1"]["host1"])
 
 recovery = Fast_Recovery_Manager('example_link_failure_map.json')
