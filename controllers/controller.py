@@ -7,9 +7,10 @@ class Controller(object):
 
     def __init__(self, base_traffic):
         self.base_traffic_file = base_traffic
-        self.topo = load_topo('example_topology.json')
+        self.topo = load_topo('topology.json')
         self.controllers = {}
-        self.recovery_manager = FRM(self.topo, 'example_link_failure_map.json') 
+        # TODO: Uncomment when it works.
+        # self.recovery_manager = FRM(self.topo, 'example_link_failure_map.json') 
         self.init()
 
     def init(self):
@@ -21,11 +22,23 @@ class Controller(object):
         """Resets switches state"""
         [controller.reset_state() for controller in self.controllers.values()]
 
+    def get_port_num_of_host(self, switch_name)
+        host_name = switch_name + "_h0"
+        return self.topo.node_to_node_port_num(switch_name, host_name)
+
     def connect_to_switches(self):
         """Connects to switches"""
+        
         for p4switch in self.topo.get_p4switches():
             thrift_port = self.topo.get_thrift_port(p4switch)
-            self.controllers[p4switch] = SimpleSwitchThriftAPI(thrift_port)
+            cont = SimpleSwitchThriftAPI(thrift_port)
+            
+            # Configure the host_port
+            host_port = get_port_num_of_host(p4switch)
+            cont.pvs_add("MyParser.host_port", str(host_port))
+
+            self.controllers[p4switch] = cont
+
 
     def run(self):
         """Run function"""
