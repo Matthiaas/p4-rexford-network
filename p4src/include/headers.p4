@@ -9,6 +9,14 @@ const bit<4> HEARTBEAT_VERSION = 1;
 const bit<4> IPV4_VERSION = 4;
 const bit<16> TYPE_IPV4 = 0x800;
 
+
+
+typedef bit<9>  egressSpec_t;
+typedef bit<48> macAddr_t;
+typedef bit<32> ip4Addr_t;
+typedef bit<4> rexfordAddr_t;
+
+
 // Define headers
 
 struct host_port_t {
@@ -18,12 +26,9 @@ struct host_port_t {
 
 // Instantiate metadata fields
 struct metadata {
-
+    ip4Addr_t ipv4Addr;
+    rexfordAddr_t rexfordAddr;
 }
-
-typedef bit<9>  egressSpec_t;
-typedef bit<48> macAddr_t;
-typedef bit<32> ip4Addr_t;
 
 header ethernet_t {
     macAddr_t dstAddr;
@@ -45,6 +50,21 @@ header rexford_ipv4_t {
     bit<16>   identification;
     bit<3>    flags;
     bit<13>   fragOffset;
+    bit<8>    protocol;
+    bit<16>   hdrChecksum;
+    ip4Addr_t srcAddr;
+    ip4Addr_t dstAddr;
+}
+
+header ipv4_t {
+    bit<4>    version;
+    bit<4>    ihl;
+    bit<6>    dscp;
+    bit<2>    ecn;
+    bit<16>   totalLen;
+    bit<16>   identification;
+    bit<3>    flags;
+    bit<13>   fragOffset;
     bit<8>    ttl;
     bit<8>    protocol;
     bit<16>   hdrChecksum;
@@ -55,6 +75,7 @@ header rexford_ipv4_t {
 // Instantiate packet headers
 struct headers {
     ethernet_t      ethernet;
+    ipv4_t          ipv4;
     rexford_t       rexford;
     rexford_ipv4_t  rexford_ipv4;
 }
