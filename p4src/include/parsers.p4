@@ -24,10 +24,14 @@ parser MyParser(packet_in packet,
     state parse_host_traffic {
         packet.extract(hdr.ethernet);
         transition select(hdr.ethernet.etherType){
-            // Packets without ethernet look exactly like internal packages.
-            TYPE_IPV4: parse_internal_traffic;
+            TYPE_IPV4: parse_ipv4_traffic;
             default: accept;
         }
+    }
+
+    state parse_ipv4_traffic {
+        packet.extract(hdr.ipv4);
+        transition accept;
     }
 
     state parse_internal_traffic {
@@ -58,6 +62,7 @@ control MyDeparser(packet_out packet, in headers hdr) {
         // The ethernet part of the packet will not be valid for internal 
         // traffic.
         packet.emit(hdr.ethernet);
+        packet.emit(hdr.ipv4);
         packet.emit(hdr.rexford);
         packet.emit(hdr.rexford_ipv4);
      }
