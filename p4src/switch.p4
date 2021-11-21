@@ -30,27 +30,6 @@ control MyIngress(inout headers hdr,
         standard_metadata.egress_spec = port;
     }
 
-   
-
-    /*
-
-     action set_rexfordAddr(rexfordAddr_t addr) {
-        meta.rexfordAddr = addr;
-    }
-
-
-    // We would need something like this for shorter "ip-adresses."
-    table ipv4_to_rexford {
-        key = { meta.ipv4Addr : exact; }
-        actions = {
-            set_rexfordAddr;
-            NoAction;
-        }
-        default_action = NoAction();
-    }
-
-    */
-
     table ipv4_forward {
         key = { hdr.rexford_ipv4.dstAddr : exact; }
         actions =  {
@@ -75,24 +54,11 @@ control MyIngress(inout headers hdr,
             hdr.rexford_ipv4.dscp       = hdr.ipv4.dscp;
             hdr.rexford_ipv4.ecn        = hdr.ipv4.ecn;
             hdr.rexford_ipv4.totalLen   = hdr.ipv4.totalLen;
-            hdr.rexford_ipv4.identification   = hdr.ipv4.identification;
             hdr.rexford_ipv4.flags      = hdr.ipv4.flags;
-            hdr.rexford_ipv4.fragOffset = hdr.ipv4.fragOffset;
             hdr.rexford_ipv4.protocol   = hdr.ipv4.protocol;
 
-            hdr.rexford_ipv4.srcAddr = hdr.ipv4.srcAddr;
-            hdr.rexford_ipv4.dstAddr   = hdr.ipv4.dstAddr;
-
-            // Set src and dst adress.
-            /*
-            meta.ipv4Addr = hdr.ipv4.srcAddr;
-            ipv4_to_rexford.apply();
-            hdr.rexford_ipv4.srcAddr = meta.rexfordAddr;
-
-            meta.ipv4Addr = hdr.ipv4.dstAddr;
-            ipv4_to_rexford.apply();
-            hdr.rexford_ipv4.dstAddr = meta.rexfordAddr;
-            */
+            hdr.rexford_ipv4.srcAddr = (bit<4>) hdr.ipv4.src_rexford_addr;
+            hdr.rexford_ipv4.dstAddr = (bit<4>) hdr.ipv4.dst_rexford_addr;
         }
 
         if (hdr.rexford_ipv4.isValid()) {
@@ -128,13 +94,18 @@ control MyEgress(inout headers hdr,
         hdr.ipv4.dscp       = hdr.rexford_ipv4.dscp;
         hdr.ipv4.ecn        = hdr.rexford_ipv4.ecn;
         hdr.ipv4.totalLen   = hdr.rexford_ipv4.totalLen;
-        hdr.ipv4.identification   = hdr.rexford_ipv4.identification;
+        hdr.ipv4.identification   = 0;
         hdr.ipv4.flags      = hdr.rexford_ipv4.flags;
-        hdr.ipv4.fragOffset = hdr.rexford_ipv4.fragOffset;
+        hdr.ipv4.fragOffset = 0;
         hdr.ipv4.protocol   = hdr.rexford_ipv4.protocol;
 
-        hdr.ipv4.srcAddr = hdr.rexford_ipv4.srcAddr;
-        hdr.ipv4.dstAddr = hdr.rexford_ipv4.dstAddr;
+        hdr.ipv4.src_network      = 0x0A00;
+        hdr.ipv4.src_rexford_addr = (bit<8>) hdr.rexford_ipv4.srcAddr;
+        hdr.ipv4.src_host_num      = 0x1;
+        
+        hdr.ipv4.dst_network      = 0x0A00;
+        hdr.ipv4.dst_rexford_addr = (bit<8>) hdr.rexford_ipv4.dstAddr;
+        hdr.ipv4.dst_host_num      = 0x1;
     }
 
     table host_port_to_mac {
@@ -173,8 +144,12 @@ control MyComputeChecksum(inout headers hdr, inout metadata meta) {
                 hdr.ipv4.fragOffset,
                 hdr.ipv4.ttl,
                 hdr.ipv4.protocol,
-                hdr.ipv4.srcAddr,
-                hdr.ipv4.dstAddr 
+                hdr.ipv4.src_network,
+                hdr.ipv4.src_rexford_addr,
+                hdr.ipv4.src_host_num,
+                hdr.ipv4.dst_network,
+                hdr.ipv4.dst_rexford_addr,
+                hdr.ipv4.dst_host_num
             },
             hdr.ipv4.hdrChecksum,
             HashAlgorithm.csum16);

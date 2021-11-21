@@ -13,7 +13,7 @@ const bit<16> TYPE_IPV4 = 0x800;
 
 typedef bit<9>  egressSpec_t;
 typedef bit<48> macAddr_t;
-typedef bit<32> ip4Addr_t;
+
 typedef bit<4> rexfordAddr_t;
 
 
@@ -26,8 +26,7 @@ struct host_port_t {
 
 // Instantiate metadata fields
 struct metadata {
-    ip4Addr_t ipv4Addr;
-    rexfordAddr_t rexfordAddr;
+
 }
 
 header ethernet_t {
@@ -43,19 +42,20 @@ header rexford_t {
     bit<4>    ihl;
 }
 
+// Size = 9 B
 header rexford_ipv4_t {
     bit<6>    dscp;
     bit<2>    ecn;
     bit<16>   totalLen;
-    bit<16>   identification;
     bit<3>    flags;
-    bit<13>   fragOffset;
+    bit<5>    padding;
     bit<8>    protocol;
     bit<16>   hdrChecksum;
-    ip4Addr_t srcAddr;
-    ip4Addr_t dstAddr;
+    rexfordAddr_t srcAddr;
+    rexfordAddr_t dstAddr;
 }
 
+// Size = 20 B
 header ipv4_t {
     bit<4>    version;
     bit<4>    ihl;
@@ -68,8 +68,12 @@ header ipv4_t {
     bit<8>    ttl;
     bit<8>    protocol;
     bit<16>   hdrChecksum;
-    ip4Addr_t srcAddr;
-    ip4Addr_t dstAddr;
+    bit<16> src_network; // Always 10.0.
+    bit<8>  src_rexford_addr;
+    bit<8>  src_host_num; // Always 1 
+    bit<16> dst_network; // Always 10.0.
+    bit<8>  dst_rexford_addr;
+    bit<8>  dst_host_num; // Always 1 
 }
 
 // Instantiate packet headers
