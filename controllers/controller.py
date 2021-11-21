@@ -40,17 +40,17 @@ class Controller(object):
     def setup_test_tables_from_FRA_to_MUC(self):
         self.controllers["FRA"].table_add(
             "ipv4_forward", action_name="set_nhop", 
-            match_keys=["10.0.6.1"], action_params=["7"])
+            match_keys=["6"], action_params=["7"])
         self.controllers["FRA"].table_add(
             "ipv4_forward", action_name="set_nhop", 
-            match_keys=["10.0.13.1"], action_params=["4"])
+            match_keys=["13"], action_params=["4"])
         print("Thirftprot FRA::", self.topo.get_thrift_port("FRA"))
         self.controllers["MUN"].table_add(
             "ipv4_forward", action_name="set_nhop", 
-            match_keys=["10.0.6.1"], action_params=["3"])
+            match_keys=["6"], action_params=["3"])
         self.controllers["MUN"].table_add(
             "ipv4_forward", action_name="set_nhop", 
-            match_keys=["10.0.13.1"], action_params=["5"])
+            match_keys=["13"], action_params=["5"])
 
     def connect_to_switches(self):
         """Connects to switches"""
@@ -58,7 +58,7 @@ class Controller(object):
         for p4switch in self.topo.get_p4switches():
             thrift_port = self.topo.get_thrift_port(p4switch)
             self.controllers[p4switch] = SimpleSwitchThriftAPI(thrift_port)
-        
+
     def run(self):
         """Run function"""
         # Setup tables and varsets.
