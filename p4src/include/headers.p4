@@ -68,9 +68,13 @@ header ipv4_t {
     bit<8>    ttl;
     bit<8>    protocol;
     bit<16>   hdrChecksum;
+    
+    // Src Ip_addr:
     bit<16> src_network; // Always 10.0.
     bit<8>  src_rexford_addr;
     bit<8>  src_host_num; // Always 1 
+
+    // Dst Ip_addr:
     bit<16> dst_network; // Always 10.0.
     bit<8>  dst_rexford_addr;
     bit<8>  dst_host_num; // Always 1 
