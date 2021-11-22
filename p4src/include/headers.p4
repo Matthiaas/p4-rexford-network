@@ -10,6 +10,10 @@ const bit<4> IPV4_VERSION = 4;
 const bit<16> TYPE_IPV4 = 0x800;
 
 
+const bit<8> TCP_PROTOCOL = 6;
+const bit<8> UDP_PROTOCOL = 17;
+
+
 
 typedef bit<9>  egressSpec_t;
 typedef bit<48> macAddr_t;
@@ -48,11 +52,13 @@ header rexford_ipv4_t {
     bit<2>    ecn;
     bit<16>   totalLen;
     bit<3>    flags;
-    bit<5>    padding;
+    bit<1>    padding;
     bit<8>    protocol;
     bit<16>   hdrChecksum;
     rexfordAddr_t srcAddr;
     rexfordAddr_t dstAddr;
+    // Waypoint is equal to dstAddr if there is no waypoint.
+    rexfordAddr_t wayPoint;
 }
 
 // Size = 20 B
@@ -80,10 +86,40 @@ header ipv4_t {
     bit<8>  dst_host_num; // Always 1 
 }
 
+
+header tcp_t {
+    bit<16> srcPort;
+    bit<16> dstPort;
+    bit<32> seqNo;
+    bit<32> ackNo;
+    bit<4>  dataOffset;
+    bit<4>  res;
+    bit<1>  cwr;
+    bit<1>  ece;
+    bit<1>  urg;
+    bit<1>  ack;
+    bit<1>  psh;
+    bit<1>  rst;
+    bit<1>  syn;
+    bit<1>  fin;
+    bit<16> window;
+    bit<16> checksum;
+    bit<16> urgentPtr;
+}
+
+header udp_t {
+    bit<16> srcPort;
+    bit<16> dstPort;
+    bit<16> len;
+    bit<16> checksum;
+}
+
 // Instantiate packet headers
 struct headers {
     ethernet_t      ethernet;
     ipv4_t          ipv4;
     rexford_t       rexford;
     rexford_ipv4_t  rexford_ipv4;
+    tcp_t           tcp;
+    udp_t           udp;
 }
