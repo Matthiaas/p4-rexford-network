@@ -30,6 +30,14 @@ control MyIngress(inout headers hdr,
         standard_metadata.egress_spec = port;
     }
 
+    action set_waypoint(rexfordAddr_t wayPoint) {
+        hdr.rexford_ipv4.wayPoint = wayPoint;
+    }
+
+    action set_no_waypoint() {
+        hdr.rexford_ipv4.wayPoint = hdr.rexford_ipv4.dstAddr;
+    }
+
     table ipv4_forward {
         key = { hdr.rexford_ipv4.dstAddr : exact; }
         actions =  {
@@ -37,6 +45,18 @@ control MyIngress(inout headers hdr,
             drop;
         }
         default_action = drop();
+    }
+
+    table udp_waypoint{
+        actions = {
+            set_waypoint;
+            set_no_waypoint;
+        }
+        key = {
+            hdr.ipv4.dst_rexford_addr: exact;
+        }
+        size = 16;
+        default_action = set_no_waypoint();
     }
 
     apply {
@@ -59,10 +79,16 @@ control MyIngress(inout headers hdr,
 
             hdr.rexford_ipv4.srcAddr = (bit<4>) hdr.ipv4.src_rexford_addr;
             hdr.rexford_ipv4.dstAddr = (bit<4>) hdr.ipv4.dst_rexford_addr;
+
+            
         }
 
         if (hdr.rexford_ipv4.isValid()) {
             ipv4_forward.apply();
+        }
+
+        if(hdr.udp.isValid()) {
+            udp_waypoint.apply();
         }
     }
 }

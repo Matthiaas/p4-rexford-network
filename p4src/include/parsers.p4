@@ -31,7 +31,11 @@ parser MyParser(packet_in packet,
 
     state parse_ipv4_traffic {
         packet.extract(hdr.ipv4);
-        transition accept;
+        transition select(hdr.ipv4.protocol){
+            TCP_PROTOCOL: parse_tcp;
+            UDP_PROTOCOL: parse_udp;
+            default: accept;
+        }
     }
 
     state parse_internal_traffic {
@@ -45,6 +49,20 @@ parser MyParser(packet_in packet,
 
     state parse_rexford_ipv4 {
         packet.extract(hdr.rexford_ipv4);
+        transition select(hdr.rexford_ipv4.protocol){
+            TCP_PROTOCOL: parse_tcp;
+            UDP_PROTOCOL: parse_udp;
+            default: accept;
+        }
+    }
+
+    state parse_udp {
+        packet.extract(hdr.udp);
+        transition accept;
+    }
+
+    state parse_tcp {
+        packet.extract(hdr.tcp);
         transition accept;
     }
 
@@ -65,5 +83,7 @@ control MyDeparser(packet_out packet, in headers hdr) {
         packet.emit(hdr.ipv4);
         packet.emit(hdr.rexford);
         packet.emit(hdr.rexford_ipv4);
+        packet.emit(hdr.tcp);
+        packet.emit(hdr.udp);
      }
 }
