@@ -30,7 +30,7 @@ struct host_port_t {
 
 // Instantiate metadata fields
 struct metadata {
-
+    rexfordAddr_t host_addr;
 }
 
 header ethernet_t {

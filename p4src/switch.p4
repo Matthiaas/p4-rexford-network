@@ -22,6 +22,8 @@ control MyIngress(inout headers hdr,
                   inout metadata meta,
                   inout standard_metadata_t standard_metadata) {
 
+    register<bit<4>>(1) host_address;
+
     action drop() {
         mark_to_drop(standard_metadata);
     }
@@ -39,7 +41,7 @@ control MyIngress(inout headers hdr,
     }
 
     table ipv4_forward {
-        key = { hdr.rexford_ipv4.dstAddr : exact; }
+        key = { hdr.rexford_ipv4.wayPoint : exact; }
         actions =  {
             set_nhop;
             drop;
@@ -59,7 +61,12 @@ control MyIngress(inout headers hdr,
         default_action = set_no_waypoint();
     }
 
+
+
     apply {
+        // Read the address of the host.
+        host_address.read(meta.host_addr, 0);
+
         if (hdr.ethernet.isValid()) {
             // Packet comes from host, remove the ethernet hdr.
             hdr.ethernet.setInvalid();
@@ -80,15 +87,21 @@ control MyIngress(inout headers hdr,
             hdr.rexford_ipv4.srcAddr = (bit<4>) hdr.ipv4.src_rexford_addr;
             hdr.rexford_ipv4.dstAddr = (bit<4>) hdr.ipv4.dst_rexford_addr;
 
-            
+            if(hdr.udp.isValid()) {
+                udp_waypoint.apply();
+            }
+        }
+
+        if (hdr.rexford_ipv4.wayPoint != hdr.rexford_ipv4.dstAddr) {
+            // We need to check if we reached the waypoint.
+            if (hdr.rexford_ipv4.wayPoint == meta.host_addr) {
+                // We reached the waypoint.
+                hdr.rexford_ipv4.wayPoint = hdr.rexford_ipv4.dstAddr;
+            }
         }
 
         if (hdr.rexford_ipv4.isValid()) {
             ipv4_forward.apply();
-        }
-
-        if(hdr.udp.isValid()) {
-            udp_waypoint.apply();
         }
     }
 }
