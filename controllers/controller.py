@@ -41,13 +41,19 @@ class Controller(object):
         # Ipaddress has format: 10.0.rexfordAddr.1/24
         return ipstr.split(".")[2]
 
-    def configure_host_port(self, cont, p4switch):
+    def configure_host_port(self, p4switch):
         host_port, host_mac = self.get_port_and_mac_of_host(p4switch)
-        print(host_port, host_mac)
+        cont = self.controllers[p4switch]
         cont.pvs_add("MyParser.host_port", host_port)
         cont.table_add(
             "host_port_to_mac", action_name="reconstruct_packet", 
             match_keys=[host_port], action_params=[host_mac])
+
+    def configure_host_address(self, p4switch):
+        host_name = p4switch + "_h0"
+        host_addr = self.get_rexford_addr(host_name)
+        cont = self.controllers[p4switch]
+        cont.register_write("host_address", 0, int(host_addr))
 
     def setup_way_points(self, way_point_file_name):
         wps = wpr.get_way_points(way_point_file_name)
@@ -90,7 +96,8 @@ class Controller(object):
         """Run function"""
         # Setup tables and varsets.
         for p4switch in self.topo.get_p4switches():
-            self.configure_host_port(self.controllers[p4switch], p4switch)
+            self.configure_host_port(p4switch)
+            self.configure_host_address(p4switch)
         self.setup_way_points("controllers/configs/full.slas")
 
     def main(self):
