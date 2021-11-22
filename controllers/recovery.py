@@ -254,6 +254,6 @@ class Fast_Recovery_Manager(object):
     
 #recovery = Fast_Recovery_Manager('example_link_failure_map.json')
 if __name__=="__main__":
-    graph = load_topo("/home/p4/13_rexford/controllers/example_topology.json")
-    all_failures = Fast_Recovery_Manager.load_failures('failures.json')
+    graph = load_topo("/home/p4/13_rexford/controllers/configs/example_topology.json")
+    all_failures = Fast_Recovery_Manager.load_failures('configs/failures.json')
     Fast_Recovery_Manager.precompute_routing(graph, graph.get_p4switches().keys(), graph.get_hosts().keys(), all_failures)
