@@ -223,7 +223,8 @@ class Fast_Recovery_Manager(object):
     
     @staticmethod
     def precompute_routing(graph: Graph, switches, hosts, all_failures=[]):
-        with open("example_link_failure_map_generated.json",'w') as f:
+        print("configs/link_failure_map_generated.json")
+        with open("configs/link_failure_map_generated.json",'w') as f:
             map = {"map": [] ,"_comment": []}
             scenarios = []
             if len(all_failures)==0:
@@ -254,6 +255,7 @@ class Fast_Recovery_Manager(object):
     
 #recovery = Fast_Recovery_Manager('example_link_failure_map.json')
 if __name__=="__main__":
-    graph = load_topo("/home/p4/13_rexford/controllers/configs/example_topology.json")
+    print("hi")
+    graph = load_topo("../topology.json")
     all_failures = Fast_Recovery_Manager.load_failures('configs/failures.json')
     Fast_Recovery_Manager.precompute_routing(graph, graph.get_p4switches().keys(), graph.get_hosts().keys(), all_failures)
