@@ -3,6 +3,7 @@ import argparse
 from p4utils.utils.helper import load_topo
 from p4utils.utils.sswitch_thrift_API import SimpleSwitchThriftAPI
 from recovery import Fast_Recovery_Manager as FRM
+import json
 
 import way_point_reader as wpr
 
@@ -13,6 +14,7 @@ class Controller(object):
         self.base_traffic_file = base_traffic
         self.topo = load_topo('topology.json')
         self.controllers = {}
+        self.failure_rts = {}
         # TODO: Uncomment when it works.
         # self.recovery_manager = FRM(self.topo, 'example_link_failure_map.json') 
         self.init()
@@ -39,7 +41,14 @@ class Controller(object):
         switch_name = self.get_switch_of_host(host_name)
         ipstr = self.topo.node_to_node_interface_ip(host_name, switch_name)
         # Ipaddress has format: 10.0.rexfordAddr.1/24
-        return ipstr.split(".")[2]
+        # They enumerate from 1 to 16. 
+        # Since our address is 4 bit "16" should be mapped to "0".
+        addr = ipstr.split(".")[2]
+        if addr == "16":
+            # TODO: This is an awfull hack. We should either use tables or use 5 bit as adresses or so.
+            # See switch.p4
+            addr = "0"
+        return addr
 
     def configure_host_port(self, p4switch):
         host_port, host_mac = self.get_port_and_mac_of_host(p4switch)
@@ -68,6 +77,31 @@ class Controller(object):
                 "udp_waypoint", action_name="set_waypoint", 
                 match_keys=[dst_addr], action_params=[wp_addr])
 
+    def load_routing_table(self, routing_tables):
+        for p4switch in self.topo.get_p4switches():
+            rt = routing_tables[p4switch]
+            
+            for host_name, routs in rt.items():
+                
+                host_addr = self.get_rexford_addr(host_name)
+                 # TODO: Watch out for the LFA (routs[1]) stuff if none exsists....
+                nexthop_port = str(self.topo.node_to_node_port_num(p4switch, routs[0]))
+                lfa_port = nexthop_port
+                if routs[1] != "":
+                    lfa_port = str(self.topo.node_to_node_port_num(p4switch, routs[1]))
+                self.controllers[p4switch].table_add(
+                  "ipv4_forward", action_name="set_nhop", 
+                    match_keys=[host_addr], action_params=[nexthop_port])  
+                print("routs")
+                print([nexthop_port, lfa_port])
+
+    def setup_routing_lfa(self, config_file):
+        with open(config_file, 'r') as f:
+            for entry in json.load(f)["map"]:
+                failures = frozenset(entry["failures"])
+                self.failure_rts[failures] = entry["routing_tbl"]
+        self.load_routing_table(self.failure_rts[frozenset()])
+                
 
     # Delete this when we have proper routing tabels.
     def setup_test_tables_from_FRA_to_MUC(self):
@@ -99,6 +133,8 @@ class Controller(object):
             self.configure_host_port(p4switch)
             self.configure_host_address(p4switch)
         self.setup_way_points("controllers/configs/full.slas")
+        self.setup_routing_lfa("controllers/configs/link_failure_map_generated.json")
+
 
     def main(self):
         """Main function"""

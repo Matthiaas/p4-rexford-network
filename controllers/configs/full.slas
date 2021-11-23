@@ -33,6 +33,7 @@ prr_31,*,*,60001--*,60001--*,udp,prr,75
 prr_32,*,*,60001--*,60001--*,udp,prr,95
 prr_33,*,*,60001--*,60001--*,udp,prr,100
 wp_34,LON_h0,BAR_h0,*--*,*--*,udp,wp,PAR
+wp_35,POR_h0,GLO_h0,*--*,*--*,udp,wp,PAR
 wp_36,BRI_h0,BAR_h0,*--*,*--*,udp,wp,PAR
 wp_37,BER_h0,LIS_h0,*--*,*--*,udp,wp,MAD
 wp_38,LIS_h0,BER_h0,*--*,*--*,udp,wp,MAD

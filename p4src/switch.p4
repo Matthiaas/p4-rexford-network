@@ -36,10 +36,6 @@ control MyIngress(inout headers hdr,
         hdr.rexford_ipv4.wayPoint = wayPoint;
     }
 
-    action set_no_waypoint() {
-        hdr.rexford_ipv4.wayPoint = hdr.rexford_ipv4.dstAddr;
-    }
-
     table ipv4_forward {
         key = { hdr.rexford_ipv4.wayPoint : exact; }
         actions =  {
@@ -52,16 +48,14 @@ control MyIngress(inout headers hdr,
     table udp_waypoint{
         actions = {
             set_waypoint;
-            set_no_waypoint;
+            NoAction;
         }
         key = {
             hdr.ipv4.dst_rexford_addr: exact;
         }
         size = 16;
-        default_action = set_no_waypoint();
+        default_action = NoAction();
     }
-
-
 
     apply {
         // Read the address of the host.
@@ -86,6 +80,8 @@ control MyIngress(inout headers hdr,
 
             hdr.rexford_ipv4.srcAddr = (bit<4>) hdr.ipv4.src_rexford_addr;
             hdr.rexford_ipv4.dstAddr = (bit<4>) hdr.ipv4.dst_rexford_addr;
+            // In case there is no waypoint.
+            hdr.rexford_ipv4.wayPoint = hdr.rexford_ipv4.dstAddr;
 
             if(hdr.udp.isValid()) {
                 udp_waypoint.apply();
@@ -103,6 +99,7 @@ control MyIngress(inout headers hdr,
         if (hdr.rexford_ipv4.isValid()) {
             ipv4_forward.apply();
         }
+       
     }
 }
 
@@ -140,10 +137,18 @@ control MyEgress(inout headers hdr,
 
         hdr.ipv4.src_network      = 0x0A00;
         hdr.ipv4.src_rexford_addr = (bit<8>) hdr.rexford_ipv4.srcAddr;
+        // TODO: This is an awfull hack. We should either use tables or use 5 bit as adresses or so.
+        if (hdr.ipv4.src_rexford_addr == 0) {
+            hdr.ipv4.src_rexford_addr = 16;
+        }
         hdr.ipv4.src_host_num      = 0x1;
         
         hdr.ipv4.dst_network      = 0x0A00;
         hdr.ipv4.dst_rexford_addr = (bit<8>) hdr.rexford_ipv4.dstAddr;
+        // TODO: This is an awfull hack. We should either use tables or use 5 bit as adresses or so.
+        if (hdr.ipv4.dst_rexford_addr == 0) {
+            hdr.ipv4.dst_rexford_addr = 16;
+        }
         hdr.ipv4.dst_host_num      = 0x1;
     }
 
