@@ -24,11 +24,7 @@ parser MyParser(packet_in packet,
     state parse_host_traffic {
         packet.extract(hdr.ethernet);
         transition select(hdr.ethernet.etherType){
-<<<<<<< HEAD
-            TYPE_IPV4: parse_ipv4_traffic;
-=======
             ETHER_TYPE_IPV4: parse_ipv4_traffic;
->>>>>>> 7b08871f1f38e31b71bc49c8e13189ef93f0519e
             default: accept;
         }
     }
@@ -61,8 +57,6 @@ parser MyParser(packet_in packet,
         }
     }
 
-<<<<<<< HEAD
-=======
     state parse_way_pointed_traffic {
         packet.extract(hdr.ethernet);
         packet.extract(hdr.ipv4);
@@ -74,7 +68,6 @@ parser MyParser(packet_in packet,
         }
     }
 
->>>>>>> 7b08871f1f38e31b71bc49c8e13189ef93f0519e
     state parse_udp {
         packet.extract(hdr.udp);
         transition accept;
@@ -100,11 +93,7 @@ control MyDeparser(packet_out packet, in headers hdr) {
         // traffic.
         packet.emit(hdr.ethernet);
         packet.emit(hdr.ipv4);
-<<<<<<< HEAD
-        packet.emit(hdr.rexford);
-=======
         packet.emit(hdr.waypoint);
->>>>>>> 7b08871f1f38e31b71bc49c8e13189ef93f0519e
         packet.emit(hdr.rexford_ipv4);
         packet.emit(hdr.tcp);
         packet.emit(hdr.udp);
