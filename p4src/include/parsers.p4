@@ -24,7 +24,11 @@ parser MyParser(packet_in packet,
     state parse_host_traffic {
         packet.extract(hdr.ethernet);
         transition select(hdr.ethernet.etherType){
+<<<<<<< HEAD
             TYPE_IPV4: parse_ipv4_traffic;
+=======
+            ETHER_TYPE_IPV4: parse_ipv4_traffic;
+>>>>>>> 7b08871f1f38e31b71bc49c8e13189ef93f0519e
             default: accept;
         }
     }
@@ -39,10 +43,11 @@ parser MyParser(packet_in packet,
     }
 
     state parse_internal_traffic {
-        packet.extract(hdr.rexford);
-        transition select(hdr.rexford.version) {
-            IPV4_VERSION: parse_rexford_ipv4;
-            HEARTBEAT_VERSION: parse_hearth_beat;
+        bit<16> ether_type = (bit<16>) packet.lookahead<bit<112>>();
+        meta.ether_type = ether_type;
+        transition select(ether_type) {
+            ETHER_TYPE_INTERNAL: parse_rexford_ipv4;
+            ETHER_TYPE_INTERNAL_WAYPOINT: parse_way_pointed_traffic;
             default: accept;
         }
     }
@@ -56,6 +61,20 @@ parser MyParser(packet_in packet,
         }
     }
 
+<<<<<<< HEAD
+=======
+    state parse_way_pointed_traffic {
+        packet.extract(hdr.ethernet);
+        packet.extract(hdr.ipv4);
+        packet.extract(hdr.waypoint);
+        transition select(hdr.ipv4.protocol){
+            TCP_PROTOCOL: parse_tcp;
+            UDP_PROTOCOL: parse_udp;
+            default: accept;
+        }
+    }
+
+>>>>>>> 7b08871f1f38e31b71bc49c8e13189ef93f0519e
     state parse_udp {
         packet.extract(hdr.udp);
         transition accept;
@@ -81,7 +100,11 @@ control MyDeparser(packet_out packet, in headers hdr) {
         // traffic.
         packet.emit(hdr.ethernet);
         packet.emit(hdr.ipv4);
+<<<<<<< HEAD
         packet.emit(hdr.rexford);
+=======
+        packet.emit(hdr.waypoint);
+>>>>>>> 7b08871f1f38e31b71bc49c8e13189ef93f0519e
         packet.emit(hdr.rexford_ipv4);
         packet.emit(hdr.tcp);
         packet.emit(hdr.udp);

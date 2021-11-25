@@ -7,7 +7,11 @@
 const bit<9> HOST_INGRESS_PORT = 0;
 const bit<4> HEARTBEAT_VERSION = 1;
 const bit<4> IPV4_VERSION = 4;
-const bit<16> TYPE_IPV4 = 0x800;
+
+const bit<16> ETHER_TYPE_IPV4 = 0x800;
+const bit<16> ETHER_TYPE_INTERNAL = 0x823;
+// This is the same as the real Ipv4 ether type on purpose
+const bit<16> ETHER_TYPE_INTERNAL_WAYPOINT = 0x800; 
 
 
 const bit<8> TCP_PROTOCOL = 6;
@@ -22,7 +26,6 @@ typedef bit<4> rexfordAddr_t;
 
 
 // Define headers
-
 struct host_port_t {
     @match(exact)
     bit<9> port;
@@ -30,7 +33,8 @@ struct host_port_t {
 
 // Instantiate metadata fields
 struct metadata {
-    rexfordAddr_t host_addr;
+    rexfordAddr_t next_destination;
+    bit<16>   ether_type;
 }
 
 header ethernet_t {
@@ -39,27 +43,44 @@ header ethernet_t {
     bit<16>   etherType;
 }
 
-header rexford_t {
-    bit<4>    version;
-    // This is unused for the internal protocol but not for ipv4.
-    // This is required because we need to have structs in multiple of 8.
-    bit<4>    ihl;
+header waypoint_t {
+    rexfordAddr_t waypoint;
+    bit<4> padding;
 }
 
 // Size = 9 B
 header rexford_ipv4_t {
-    bit<6>    dscp;
-    bit<2>    ecn;
-    bit<16>   totalLen;
-    bit<3>    flags;
-    bit<1>    padding;
-    bit<8>    protocol;
-    bit<16>   hdrChecksum;
-    rexfordAddr_t srcAddr;
-    rexfordAddr_t dstAddr;
-    // Waypoint is equal to dstAddr if there is no waypoint.
-    rexfordAddr_t wayPoint;
+    bit<4>    version;      // 4
+    bit<4>    ihl;          // 8
+    bit<6>    dscp;         // 14
+    bit<2>    ecn;          // 16
+    bit<16>   totalLen;     // 32
+    bit<3>    flags;        // 35
+    bit<1>    padding;      // 36
+    bit<8>    protocol;     // 44
+    bit<16>   hdrChecksum;  // 60
+    rexfordAddr_t srcAddr;  // 64
+    rexfordAddr_t dstAddr;  // 68
+    bit<28>   padding2;     // 96
+    bit<16>   etherType;    // 112
 }
+
+// // Size = 20 B
+// header ipv4_t {
+//     bit<4>    version;
+//     bit<4>    ihl;
+//     bit<6>    dscp;
+//     bit<2>    ecn;
+//     bit<16>   totalLen;
+//     bit<3>    flags;
+//     bit<1>    padding;
+//     bit<8>    protocol;
+//     bit<16>   hdrChecksum;
+//     rexfordAddr_t srcAddr;
+//     rexfordAddr_t dstAddr;
+//     // Waypoint is equal to dstAddr if there is no waypoint.
+//     rexfordAddr_t wayPoint;
+// }
 
 // Size = 20 B
 header ipv4_t {
@@ -118,7 +139,7 @@ header udp_t {
 struct headers {
     ethernet_t      ethernet;
     ipv4_t          ipv4;
-    rexford_t       rexford;
+    waypoint_t      waypoint;
     rexford_ipv4_t  rexford_ipv4;
     tcp_t           tcp;
     udp_t           udp;
