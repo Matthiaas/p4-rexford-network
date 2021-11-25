@@ -24,7 +24,7 @@ parser MyParser(packet_in packet,
     state parse_host_traffic {
         packet.extract(hdr.ethernet);
         transition select(hdr.ethernet.etherType){
-            TYPE_IPV4: parse_ipv4_traffic;
+            ETHER_TYPE_IPV4: parse_ipv4_traffic;
             default: accept;
         }
     }
@@ -39,10 +39,11 @@ parser MyParser(packet_in packet,
     }
 
     state parse_internal_traffic {
-        packet.extract(hdr.rexford);
-        transition select(hdr.rexford.version) {
-            IPV4_VERSION: parse_rexford_ipv4;
-            HEARTBEAT_VERSION: parse_hearth_beat;
+        bit<16> ether_type = (bit<16>) packet.lookahead<bit<112>>();
+        meta.ether_type = ether_type;
+        transition select(ether_type) {
+            ETHER_TYPE_INTERNAL: parse_rexford_ipv4;
+            ETHER_TYPE_INTERNAL_WAYPOINT: parse_way_pointed_traffic;
             default: accept;
         }
     }
@@ -50,6 +51,17 @@ parser MyParser(packet_in packet,
     state parse_rexford_ipv4 {
         packet.extract(hdr.rexford_ipv4);
         transition select(hdr.rexford_ipv4.protocol){
+            TCP_PROTOCOL: parse_tcp;
+            UDP_PROTOCOL: parse_udp;
+            default: accept;
+        }
+    }
+
+    state parse_way_pointed_traffic {
+        packet.extract(hdr.ethernet);
+        packet.extract(hdr.ipv4);
+        packet.extract(hdr.waypoint);
+        transition select(hdr.ipv4.protocol){
             TCP_PROTOCOL: parse_tcp;
             UDP_PROTOCOL: parse_udp;
             default: accept;
@@ -81,7 +93,7 @@ control MyDeparser(packet_out packet, in headers hdr) {
         // traffic.
         packet.emit(hdr.ethernet);
         packet.emit(hdr.ipv4);
-        packet.emit(hdr.rexford);
+        packet.emit(hdr.waypoint);
         packet.emit(hdr.rexford_ipv4);
         packet.emit(hdr.tcp);
         packet.emit(hdr.udp);
