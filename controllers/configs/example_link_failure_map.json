@@ -4,7 +4,7 @@
                 "failures":["Link1", "link2", "bla"],
                 "routing_tbl":{
                         "switch1":{
-                                "host1": ["next_hop", "lfa"],
+                                "host1": {"nexthops" : ["sw2","sw4"], "lfa" : ["sw3"]},
                                 "host2": ["bla..."]
                             },
                         "switch2":{
