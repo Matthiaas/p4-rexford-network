@@ -102,7 +102,8 @@ class Fast_Recovery_Manager(object):
         raise ScenarioNotFound()
 
     def load_nexthops_and_lfas(self, failures: List[Tuple[str, str]] = None) -> Dict[str, List[Tuple[str, int, str]]]:
-        """Load nexthops and lfas from state
+        """
+        Load nexthops and lfas from state
 
         Args:
             failures (list(tuple(str, str))): List of failed links.
@@ -117,11 +118,12 @@ class Fast_Recovery_Manager(object):
                                                                             ]
                                                                     }
                                                                 }
-        
         """
+        
         nexthops = {}
         routing_tbl = self.query_map(failures)
         for sw in self.switches:
+            d = {}
             for host in self.hosts:
                 hops = routing_tbl[sw][host]  # nh, lfa
                 state = []
@@ -133,7 +135,8 @@ class Fast_Recovery_Manager(object):
                         mac = self.topo.get_node_to_node_mac(hop, sw)
                         port = self.topo.node_to_node_port_num(sw, hop)
                         state.append((hop, port, mac))
-                nexthops[sw] = {host: state}
+                d[host] = state
+            nexthops[sw] = d
         return nexthops
 
     def get_nexthop(nexthops, switch, host):
