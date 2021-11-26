@@ -6,6 +6,8 @@
 #include "include/headers.p4"
 #include "include/parsers.p4"
 
+#define MAX_PORTS 8
+
 /*************************************************************************
 ************   C H E C K S U M    V E R I F I C A T I O N   *************
 *************************************************************************/
@@ -27,6 +29,11 @@ control MyIngress(inout headers hdr,
     register<bit<16>>(10) debug;
     register<bit<16>>(1) debug2;
 
+    register<bit<7>>(MAX_PORTS) congestion;
+    
+
+
+
     action drop() {
         mark_to_drop(std_meta);
     }
@@ -34,6 +41,8 @@ control MyIngress(inout headers hdr,
     action set_nhop(egressSpec_t port) {
         std_meta.egress_spec = port;
     }
+
+    action set_prim
 
     action set_waypoint(rexfordAddr_t waypoint) {
         hdr.ethernet.setValid();
