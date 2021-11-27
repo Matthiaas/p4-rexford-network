@@ -34,7 +34,6 @@ struct host_port_t {
 // Instantiate metadata fields
 struct metadata {
     rexfordAddr_t next_destination;
-    bit<16>   ether_type;
 }
 
 header ethernet_t {
