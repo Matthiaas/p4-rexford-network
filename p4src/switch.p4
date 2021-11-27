@@ -25,10 +25,6 @@ control MyIngress(inout headers hdr,
                   inout standard_metadata_t std_meta) {
 
     register<bit<4>>(1) host_address;
-
-    register<bit<16>>(10) debug;
-    register<bit<16>>(1) debug2;
-
     register<bit<7>>(MAX_PORTS) congestion;
     
 
@@ -42,7 +38,7 @@ control MyIngress(inout headers hdr,
         std_meta.egress_spec = port;
     }
 
-    action set_prim
+    action set_prim () {}
 
     action set_waypoint(rexfordAddr_t waypoint) {
         hdr.ethernet.setValid();
@@ -129,16 +125,7 @@ control MyIngress(inout headers hdr,
         } else if(hdr.waypoint.isValid()) {
             meta.next_destination = hdr.waypoint.waypoint;
             ipv4_forward.apply();
-        } else {
-            debug.write(3,(bit<16>) 42);
-            debug2.write(0,meta.ether_type);
-        }
-
-        debug.write(0,(bit<16>) hdr.rexford_ipv4.dstAddr);
-        debug.write(1,(bit<16>) std_meta.egress_spec);
-        debug.write(2,(bit<16>) 3);
-
-        
+        }    
        
     }
 }
