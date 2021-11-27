@@ -40,7 +40,6 @@ parser MyParser(packet_in packet,
 
     state parse_internal_traffic {
         bit<16> ether_type = (bit<16>) packet.lookahead<bit<112>>();
-        meta.ether_type = ether_type;
         transition select(ether_type) {
             ETHER_TYPE_INTERNAL: parse_rexford_ipv4;
             ETHER_TYPE_INTERNAL_WAYPOINT: parse_way_pointed_traffic;

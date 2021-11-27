@@ -70,19 +70,14 @@ control MyIngress(inout headers hdr,
     }
 
     apply {
-        debug.write(2,(bit<16>) 4);
         // Read the address of the host.
         rexfordAddr_t host_addr;
         host_address.read(host_addr, 0);
 
         if(hdr.ethernet.isValid() && hdr.udp.isValid()) {
             // Maybe setup waypoint.
-
             meta.next_destination = (bit<4>) hdr.ipv4.dst_rexford_addr;   
-            debug.write(5,(bit<16>) meta.next_destination);
-            udp_waypoint.apply();
-            debug.write(6,(bit<16>) hdr.waypoint.waypoint );
-            
+            udp_waypoint.apply();           
         }
 
         bool reached_waypoint = false;
