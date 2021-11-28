@@ -213,7 +213,8 @@ class Fast_Recovery_Manager(object):
                     print("WARNING: The graph is not connected!")
                     print("'%s' cannot reach '%s'." % (switch, host))
                     raise NotConnected()
-                nexthops = [path[1] for path in paths]  # path[0] is the switch itself.
+                # Need to remove duplicates
+                nexthops = list(set([path[1] for path in paths]))  # path[0] is the switch itself.
                 switch_results.append((host, nexthops))
 
         return results

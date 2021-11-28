@@ -84,11 +84,14 @@ class Controller(object):
             for host_name, routs in rt.items():
 
                 host_addr = self.get_rexford_addr(host_name)
-                 # TODO: Watch out for the LFA (routs[1]) stuff if none exsists....
-                nexthop_port = str(self.topo.node_to_node_port_num(p4switch, routs[0]))
+                 # TODO: Use the nexthops for ECMP routing.
+                nexthops = routs["nexthops"]
+                nexthop = nexthops[0]
+                lfa = nexthops[1] if len(nexthops) > 1 else routs["lfa"]
+                nexthop_port = str(self.topo.node_to_node_port_num(p4switch, nexthop))
                 lfa_port = nexthop_port
-                if routs[1] != "":
-                    lfa_port = str(self.topo.node_to_node_port_num(p4switch, routs[1]))
+                if lfa != nexthop and lfa != "":
+                    lfa_port = str(self.topo.node_to_node_port_num(p4switch, lfa))
                 self.controllers[p4switch].table_add(
                   "ipv4_forward", action_name="set_nhop",
                     match_keys=[host_addr], action_params=[nexthop_port])
