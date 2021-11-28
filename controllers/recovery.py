@@ -13,7 +13,12 @@ from typing import List, Set, Tuple, Dict
 
 
 class Fast_Recovery_Manager(object):
-
+    @staticmethod
+    def add_delay_weight(g: Graph):
+        #transform delay from string to float
+        for e in g.edges:
+            g[e]['delay_w'] = float(g[e]['delay'].replace('ms',''))
+    
     @staticmethod
     def parse_failures(failures: List[str]) -> List[Tuple[str, str]]:
         """
@@ -172,13 +177,13 @@ class Fast_Recovery_Manager(object):
             d = {}
             p = {}
             for h in graph.get_hosts().keys():
-                paths[sw][h] = [path for path in all_shortest_paths(graph, sw, h, 'delay')]
-                distances[sw][h] = shortest_path_length(graph, sw, h, 'delay')
+                paths[sw][h] = [path for path in all_shortest_paths(graph, sw, h, 'delay_w')]
+                distances[sw][h] = shortest_path_length(graph, sw, h, 'delay_w')
             #add distances between switches
             for sw2 in graph.get_p4switches().keys():
                 if sw == sw2:
                     continue
-                distances[sw][sw2] = shortest_path_length(graph, sw2, h, 'delay')
+                distances[sw][sw2] = shortest_path_length(graph, sw2, h, 'delay_w')
         return distances, paths
 
     @staticmethod
@@ -307,9 +312,10 @@ class Fast_Recovery_Manager(object):
 
 def main():
     print("Generating Configurations...")
-    graph = load_topo("./configs/example_topology_ecmp.json")
+    graph = load_topo("../topology.json")
     failure_path = "./configs/failures_generated.json"
-    Fast_Recovery_Manager.generate_possible_failures(graph, failure_path)
+    # done
+    #Fast_Recovery_Manager.generate_possible_failures(graph, failure_path)
     all_failures = Fast_Recovery_Manager.load_failures(failure_path)
     Fast_Recovery_Manager.precompute_routing(graph, graph.get_p4switches().keys(), graph.get_hosts().keys(), all_failures)
 
