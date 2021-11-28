@@ -25,9 +25,9 @@ control MyIngress(inout headers hdr,
                   inout standard_metadata_t std_meta) {
 
     register<bit<4>>(1) host_address;
-    register<bit<7>>(MAX_PORTS) congestion;
-    
 
+    meter((bit<32>) MAX_PORTS, MeterType.bytes) port_congestion_meter;
+    register<bit<2>>(MAX_PORTS) port_congestions;
 
 
     action drop() {
@@ -36,6 +36,7 @@ control MyIngress(inout headers hdr,
 
     action set_nhop(egressSpec_t port) {
         std_meta.egress_spec = port;
+
     }
 
     action set_prim () {}
@@ -121,6 +122,17 @@ control MyIngress(inout headers hdr,
             meta.next_destination = hdr.waypoint.waypoint;
             ipv4_forward.apply();
         }    
+
+        // Rate limiting per port.
+        bit<2> congestion_tag;
+        port_congestions.read(congestion_tag, (bit<32>) std_meta.egress_spec);
+        if (congestion_tag == V1MODEL_METER_COLOR_RED) {
+            drop();
+        } else {
+            port_congestion_meter.execute_meter((bit<32>) std_meta.egress_spec, congestion_tag);
+            port_congestions.write((bit<32>) std_meta.egress_spec, congestion_tag);
+        }
+
        
     }
 }
