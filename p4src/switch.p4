@@ -27,9 +27,6 @@ control MyIngress(inout headers hdr,
     register<bit<4>>(1) host_address;
     register<bit<7>>(MAX_PORTS) congestion;
     
-
-
-
     action drop() {
         mark_to_drop(std_meta);
     }
@@ -67,16 +64,68 @@ control MyIngress(inout headers hdr,
         }
         size = 16;
         default_action = NoAction();
+    } 
+
+    action construct_rexford_headers() {
+        hdr.rexford_ipv4.setValid(); 
+        hdr.rexford_ipv4.version    = hdr.ipv4.version;
+        hdr.rexford_ipv4.ihl        = hdr.ipv4.ihl;
+        hdr.rexford_ipv4.dscp       = hdr.ipv4.dscp;
+        hdr.rexford_ipv4.ecn        = hdr.ipv4.ecn;
+        hdr.rexford_ipv4.totalLen   = hdr.ipv4.totalLen;
+        hdr.rexford_ipv4.flags      = hdr.ipv4.flags;
+        hdr.rexford_ipv4.protocol   = hdr.ipv4.protocol;
+
+        hdr.rexford_ipv4.srcAddr = (bit<4>) hdr.ipv4.src_rexford_addr;
+        hdr.rexford_ipv4.dstAddr = (bit<4>) hdr.ipv4.dst_rexford_addr;   
+
+        hdr.rexford_ipv4.etherType = ETHER_TYPE_INTERNAL;
+    }
+
+    action set_traffic_class() {
+        // Get Traffic Class.
+        port_t srcPort = 0;
+        port_t dstPort = 0;
+        if (hdr.tcp.isValid()) {
+            srcPort = hdr.tcp.srcPort;
+            dstPort = hdr.tcp.dstPort;
+        } else if (hdr.udp.isValid()) {
+            srcPort = hdr.udp.srcPort;
+            dstPort = hdr.udp.dstPort;
+        } 
+
+        if( !hdr.tcp.isValid() && !hdr.udp.isValid()) {
+            // Internal traffic like heartbeats.
+            meta.traffic_class = 0;
+        } else if( srcPort <= 100 && dstPort <= 100) {
+            meta.traffic_class = 1;
+        } else if( srcPort <= 200 && dstPort <= 200) {
+            meta.traffic_class = 2;
+        } else if( srcPort <= 300 && dstPort <= 300) {
+            meta.traffic_class = 3;
+        } else if( srcPort <= 400 && dstPort <= 400) {
+            meta.traffic_class = 4;
+        } else if( srcPort <= 65000 && dstPort <= 65000 &&
+                    60001 <= srcPort && 60001 <= dstPort) {
+            // This is the additional Traffic
+            meta.traffic_class = 5;
+        } else {
+            // Traffic is not considered in any SLA.
+            // --> Drop it.
+            // TODO: This is not possible by calling an action.
+        }
     }
 
     apply {
+        set_traffic_class();
+
         // Read the address of the host.
         rexfordAddr_t host_addr;
         host_address.read(host_addr, 0);
 
         if(hdr.ethernet.isValid() && hdr.udp.isValid()) {
-            // Maybe setup waypoint.
             meta.next_destination = (bit<4>) hdr.ipv4.dst_rexford_addr;   
+            // Maybe setup waypoint.
             udp_waypoint.apply();           
         }
 
@@ -93,23 +142,12 @@ control MyIngress(inout headers hdr,
         if ((!hdr.waypoint.isValid() && hdr.ethernet.isValid()) || reached_waypoint) {
             // Packet comes from host or reached the waypoint, remove the ethernet hdr.
             // Only consider packets that come from a host that are not waypointed.
+
+            // First invalidate all unused headers.
             hdr.ethernet.setInvalid();
             hdr.ipv4.setInvalid();
             hdr.waypoint.setInvalid();
-
-            hdr.rexford_ipv4.setValid(); 
-            hdr.rexford_ipv4.version    = hdr.ipv4.version;
-            hdr.rexford_ipv4.ihl        = hdr.ipv4.ihl;
-            hdr.rexford_ipv4.dscp       = hdr.ipv4.dscp;
-            hdr.rexford_ipv4.ecn        = hdr.ipv4.ecn;
-            hdr.rexford_ipv4.totalLen   = hdr.ipv4.totalLen;
-            hdr.rexford_ipv4.flags      = hdr.ipv4.flags;
-            hdr.rexford_ipv4.protocol   = hdr.ipv4.protocol;
-
-            hdr.rexford_ipv4.srcAddr = (bit<4>) hdr.ipv4.src_rexford_addr;
-            hdr.rexford_ipv4.dstAddr = (bit<4>) hdr.ipv4.dst_rexford_addr;   
-
-            hdr.rexford_ipv4.etherType = ETHER_TYPE_INTERNAL;
+            construct_rexford_headers();
         }
 
         // This is used for the routing table lookup.
@@ -121,7 +159,6 @@ control MyIngress(inout headers hdr,
             meta.next_destination = hdr.waypoint.waypoint;
             ipv4_forward.apply();
         }    
-       
     }
 }
 
@@ -134,9 +171,8 @@ control MyEgress(inout headers hdr,
                  inout standard_metadata_t std_meta) {
     
     action reconstruct_packet(macAddr_t dstAddr) {
-        hdr.ethernet.setValid();
-        
         // Ethernet:
+        hdr.ethernet.setValid();
         hdr.ethernet.dstAddr = dstAddr;
         // TODO: Set src address to the mac of the switch.
         hdr.ethernet.srcAddr = dstAddr;
@@ -145,7 +181,6 @@ control MyEgress(inout headers hdr,
         // Ipv4:
         hdr.ipv4.setValid();
         hdr.rexford_ipv4.setInvalid();
-
         hdr.ipv4.version    = hdr.rexford_ipv4.version;
         hdr.ipv4.ihl        = hdr.rexford_ipv4.ihl;
         hdr.ipv4.dscp       = hdr.rexford_ipv4.dscp;
@@ -187,6 +222,8 @@ control MyEgress(inout headers hdr,
 
     apply {
         host_port_to_mac.apply();
+
+        bit<4> va;
     }
 }
 
@@ -228,10 +265,10 @@ control MyComputeChecksum(inout headers hdr, inout metadata meta) {
 
 //switch architecture
 V1Switch(
-MyParser(),
-MyVerifyChecksum(),
-MyIngress(),
-MyEgress(),
-MyComputeChecksum(),
-MyDeparser()
+    MyParser(),
+    MyVerifyChecksum(),
+    MyIngress(),
+    MyEgress(),
+    MyComputeChecksum(),
+    MyDeparser()
 ) main;

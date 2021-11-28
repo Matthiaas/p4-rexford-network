@@ -21,8 +21,8 @@ const bit<8> UDP_PROTOCOL = 17;
 
 typedef bit<9>  egressSpec_t;
 typedef bit<48> macAddr_t;
-
-typedef bit<4> rexfordAddr_t;
+typedef bit<4>  rexfordAddr_t;
+typedef bit<16> port_t;
 
 
 // Define headers
@@ -34,6 +34,7 @@ struct host_port_t {
 // Instantiate metadata fields
 struct metadata {
     rexfordAddr_t next_destination;
+    bit<3> traffic_class;
 }
 
 header ethernet_t {
@@ -108,8 +109,8 @@ header ipv4_t {
 
 
 header tcp_t {
-    bit<16> srcPort;
-    bit<16> dstPort;
+    port_t  srcPort;
+    port_t  dstPort;
     bit<32> seqNo;
     bit<32> ackNo;
     bit<4>  dataOffset;
@@ -128,8 +129,8 @@ header tcp_t {
 }
 
 header udp_t {
-    bit<16> srcPort;
-    bit<16> dstPort;
+    port_t  srcPort;
+    port_t  dstPort;
     bit<16> len;
     bit<16> checksum;
 }
