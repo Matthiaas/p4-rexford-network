@@ -177,7 +177,19 @@ class Fast_Recovery_Manager(object):
             d = {}
             p = {}
             for h in graph.get_hosts().keys():
-                paths[sw][h] = [path for path in all_shortest_paths(graph, sw, h, 'delay_w')]
+                # add only path with different first hop
+                all_paths = [path for path in all_shortest_paths(graph, sw, h, 'delay_w')]
+                nexthops = set()
+                ecmps = []
+                for path in all_paths:
+                    if path[1] not in nexthops:
+                        nexthops.add(path[1])
+                        ecmps.append(path)
+                paths[sw][h] = ecmps
+                if len(paths[sw][h]) > 1:
+                    print(f"ECMP PATH {sw}->{h}\nNexthops:\n")
+                    for path in paths[sw][h]:
+                        print("-"+path[1]+"\n")
                 distances[sw][h] = shortest_path_length(graph, sw, h, 'delay_w')
             #add distances between switches
             for sw2 in graph.get_p4switches().keys():
@@ -229,16 +241,13 @@ class Fast_Recovery_Manager(object):
             neighs = set(graph.get_p4switches_connected_to(sw))
             # for every host we want to reach
             for host, nexthops in destinations:
-                if len(nexthops) > 1:
-                    # use ECMP as Recovery
-                    continue
                 nexthop = nexthops[0]
                 if nexthop == host:
                     # direct link to host
                     continue
 
                 # retain only candidates for alternative next hop, i.e remove current primary hop
-                alt_neighs = neighs - {nexthop}
+                alt_neighs = neighs - set(nexthops)
 
                 # try to find LFA
                 #   for host
@@ -312,11 +321,12 @@ class Fast_Recovery_Manager(object):
             json.dump(map, f)
 
 def main():
-    print("Generating Configurations...")
+    print("[*] Generating Configurations...")
     graph = load_topo("../topology.json")
     failure_path = "./configs/failures_generated.json"
     # done
     #Fast_Recovery_Manager.generate_possible_failures(graph, failure_path)
+    print("[*] Failures computed, computing routing scenarios...")
     all_failures = Fast_Recovery_Manager.load_failures(failure_path)
     Fast_Recovery_Manager.precompute_routing(graph, graph.get_p4switches().keys(), graph.get_hosts().keys(), all_failures)
 

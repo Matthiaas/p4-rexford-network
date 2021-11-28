@@ -3,7 +3,6 @@
 *************************************************************************/
 
 // Define constants
-
 const bit<9> HOST_INGRESS_PORT = 0;
 const bit<4> HEARTBEAT_VERSION = 1;
 const bit<4> IPV4_VERSION = 4;
@@ -11,7 +10,8 @@ const bit<4> IPV4_VERSION = 4;
 const bit<16> ETHER_TYPE_IPV4 = 0x800;
 const bit<16> ETHER_TYPE_INTERNAL = 0x823;
 // This is the same as the real Ipv4 ether type on purpose
-const bit<16> ETHER_TYPE_INTERNAL_WAYPOINT = 0x800; 
+const bit<16> ETHER_TYPE_INTERNAL_WAYPOINT = 0x800;
+const bit<16> ETHER_TYPE_HEARTBEAT = 0x1234;
 
 
 const bit<8> TCP_PROTOCOL = 6;
@@ -35,12 +35,24 @@ struct host_port_t {
 struct metadata {
     rexfordAddr_t next_destination;
     bit<3> traffic_class;
+    // Heartbeat and fail management stuff
+    bit<1> linkState; //OK | FAIL
+    bit<32> nextHop; // egress port for nh
+    bit<32> index; // TBD
+    bit<48> timestamp; //placeholder for reading last seen timestamp
 }
 
 header ethernet_t {
     macAddr_t dstAddr;
     macAddr_t srcAddr;
     bit<16>   etherType;
+}
+
+header heartbeat_t {
+    bit<9>    port;
+    bit<1>    from_cp;
+    bit<1>    failed_link;
+    bit<5>    padding;
 }
 
 header waypoint_t {
@@ -138,6 +150,7 @@ header udp_t {
 // Instantiate packet headers
 struct headers {
     ethernet_t      ethernet;
+    heartbeat_t     heartbeat;
     ipv4_t          ipv4;
     waypoint_t      waypoint;
     rexford_ipv4_t  rexford_ipv4;
