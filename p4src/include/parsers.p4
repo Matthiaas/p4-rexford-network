@@ -43,7 +43,7 @@ parser MyParser(packet_in packet,
         transition select(ether_type) {
             ETHER_TYPE_INTERNAL: parse_rexford_ipv4;
             ETHER_TYPE_INTERNAL_WAYPOINT: parse_way_pointed_traffic;
-            ETHER_TYPE_HEARTBEAT: parse_heartbeat;
+            ETHER_TYPE_HEARTBEAT: parse_hearthbeat;
             default: accept;
         }
     }

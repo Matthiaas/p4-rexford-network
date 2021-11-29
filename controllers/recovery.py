@@ -7,6 +7,7 @@ from scapy.all import *
 import json
 import os
 from pickle import loads, dumps
+import sys
 
 from errors import *
 from typing import List, Set, Tuple, Dict
@@ -186,10 +187,10 @@ class Fast_Recovery_Manager(object):
                         nexthops.add(path[1])
                         ecmps.append(path)
                 paths[sw][h] = ecmps
-                if len(paths[sw][h]) > 1:
-                    print(f"ECMP PATH {sw}->{h}\nNexthops:\n")
-                    for path in paths[sw][h]:
-                        print("-"+path[1]+"\n")
+                #if len(paths[sw][h]) > 1:
+                    #print(f"ECMP PATH {sw}->{h}\nNexthops:\n")
+                    #for path in paths[sw][h]:
+                    #    print("-"+path[1]+"\n")
                 distances[sw][h] = shortest_path_length(graph, sw, h, 'delay_w')
             #add distances between switches
             for sw2 in graph.get_p4switches().keys():
@@ -320,17 +321,23 @@ class Fast_Recovery_Manager(object):
             map["map"] = scenarios
             json.dump(map, f)
 
-def main():
+def main(argv, argc):
+    no_failures = False
+    if argc > 1 and argv[1] == "nofailures":
+        no_failures = True
     print("[*] Generating Configurations...")
     graph = load_topo("../topology.json")
     failure_path = "./configs/failures_generated.json"
     # done
     #Fast_Recovery_Manager.generate_possible_failures(graph, failure_path)
     print("[*] Failures computed, computing routing scenarios...")
-    all_failures = Fast_Recovery_Manager.load_failures(failure_path)
+    if no_failures:
+        all_failures = [[]]
+    else:
+        all_failures = Fast_Recovery_Manager.load_failures(failure_path)
     Fast_Recovery_Manager.precompute_routing(graph, graph.get_p4switches().keys(), graph.get_hosts().keys(), all_failures)
 
 
 # recovery = Fast_Recovery_Manager('example_link_failure_map.json')
 if __name__ == "__main__":
-    main()
+    main(sys.argv, len(sys.argv))
