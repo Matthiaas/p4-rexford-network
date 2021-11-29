@@ -110,21 +110,18 @@ class Controller(object):
         self.load_routing_table(self.failure_rts[frozenset()])
                 
 
-    # Delete this when we have proper routing tabels.
-    def setup_test_tables_from_FRA_to_MUC(self):
-        self.controllers["FRA"].table_add(
-            "ipv4_forward", action_name="set_nhop", 
-            match_keys=["6"], action_params=["7"])
-        self.controllers["FRA"].table_add(
-            "ipv4_forward", action_name="set_nhop", 
-            match_keys=["13"], action_params=["4"])
-        print("Thirftprot FRA::", self.topo.get_thrift_port("FRA"))
-        self.controllers["MUN"].table_add(
-            "ipv4_forward", action_name="set_nhop", 
-            match_keys=["6"], action_params=["3"])
-        self.controllers["MUN"].table_add(
-            "ipv4_forward", action_name="set_nhop", 
-            match_keys=["13"], action_params=["5"])
+    def setup_meters(self):
+        for controller in self.controllers.values():
+            # TODO: These values are preliminary!!!!
+            # (I am not even sure about the units
+            cir =  10 * 1024 * 1024 # commited information rate [bytes/s]
+            cbs =  10 * 1024 * 1024 # commited burst size       [bytes]
+            pir =  10 * 1024 * 1024 # peak information rate     [bytes/s]
+            pbs =  10 * 1024 * 1024 # peak burst size           [bytes]
+
+            yellow = (cir, cbs)
+            red = (pir, pbs)
+            controller.meter_array_set_rates("port_congestion_meter", [yellow, red])
 
     def connect_to_switches(self):
         """Connects to switches"""
@@ -174,6 +171,7 @@ class Controller(object):
             self.configure_host_address(p4switch)
         self.setup_way_points("controllers/configs/full.slas")
         self.setup_routing_lfa("controllers/configs/link_failure_map_generated.json")
+        self.setup_meters()
         #start heartbeat traffic
         self.hb_manager.run()
 
