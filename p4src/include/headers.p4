@@ -40,6 +40,8 @@ struct metadata {
     bit<32> nextHop; // egress port for nh
     bit<32> index; // TBD
     bit<48> timestamp; //placeholder for reading last seen timestamp
+
+    bit<2> congestion_tag;
 }
 
 header ethernet_t {
