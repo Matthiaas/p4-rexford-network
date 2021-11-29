@@ -28,9 +28,15 @@ control MyIngress(inout headers hdr,
 
     meter((bit<32>) MAX_PORTS, MeterType.bytes) port_congestion_meter;
     register<bit<2>>(MAX_PORTS) port_congestions;
+    register<bit<64>>(1) dropped;
+
 
     action drop() {
         mark_to_drop(std_meta);
+        bit<64> dr;
+        dropped.read(dr, 0);
+        dropped.write(0, dr + 1);
+
     }
 
     action set_nhop(egressSpec_t port) {
@@ -68,6 +74,18 @@ control MyIngress(inout headers hdr,
         size = 16;
         default_action = NoAction();
     } 
+
+    table congestion_control {
+        key = { meta.congestion_tag: exact; }
+        actions = { 
+            drop; 
+            NoAction; 
+        }
+        default_action = NoAction();
+        const entries = {
+            2 : drop();
+        }
+    }
 
     action construct_rexford_headers() {
         hdr.rexford_ipv4.setValid(); 
@@ -163,16 +181,15 @@ control MyIngress(inout headers hdr,
             ipv4_forward.apply();
         }    
 
-        // Rate limiting per port.
-        bit<2> congestion_tag;
-        port_congestions.read(congestion_tag, (bit<32>) std_meta.egress_spec);
-        if (congestion_tag == V1MODEL_METER_COLOR_RED) {
-            drop();
-        } else {
-            port_congestion_meter.execute_meter((bit<32>) std_meta.egress_spec, congestion_tag);
-            port_congestions.write((bit<32>) std_meta.egress_spec, congestion_tag);
+
+        port_congestion_meter.execute_meter((bit<32>) std_meta.egress_spec, meta.congestion_tag);
+        port_congestions.write((bit<32>) std_meta.egress_spec, meta.congestion_tag);
+        if(meta.congestion_tag == V1MODEL_METER_COLOR_RED) {
+           drop();
         }
     }
+
+    
 }
 
 /*************************************************************************

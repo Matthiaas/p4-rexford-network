@@ -13,15 +13,21 @@ import way_point_reader as wpr
 class Controller(object):
 
     def __init__(self, base_traffic, slas):
+        
         self.base_traffic_file = base_traffic
         self.topo = load_topo('topology.json')
         self.controllers = {}
         self.failure_rts = {}
         # TODO: Uncomment when it works.
         # self.recovery_manager = FRM(self.topo, 'example_link_failure_map.json')
-        hb_freq = 0.1 #must be lower than threshold in switch.p4
-        self.hb_manager = HBG(hb_freq, self.topo)
+        # Settings:
+        self.settings = self.read_settings("controllers/configs/settings.json")
+        self.hb_manager = HBG(self.settings["heartbeat_freq"], self.topo)
         self.init()
+
+    def read_settings(self, settings_filename):
+         with open(settings_filename, 'r') as f:
+            return json.load(f)
 
     def init(self):
         """Basic initialization. Connects to switches and resets state."""
@@ -111,14 +117,19 @@ class Controller(object):
                 
 
     def setup_meters(self):
-        for controller in self.controllers.values():
-            # TODO: These values are preliminary!!!!
-            # (I am not even sure about the units
-            cir =  10 * 1024 * 1024 # commited information rate [bytes/s]
-            cbs =  10 * 1024 * 1024 # commited burst size       [bytes]
-            pir =  10 * 1024 * 1024 # peak information rate     [bytes/s]
-            pbs =  10 * 1024 * 1024 # peak burst size           [bytes]
+        commited_queue_length = self.settings["commited_queue_length"]
+        commited_rate = self.settings["commited_rate"]
 
+        peak_queue_length = self.settings["peak_queue_length"]
+        peak_rate = self.settings["peak_rate"]
+
+        packet_size = self.settings["packet_size"]
+
+        for controller in self.controllers.values():
+            cir =  commited_rate                         # commited information rate [bytes/s]
+            cbs =  commited_queue_length * packet_size   # commited burst size       [bytes]
+            pir =  peak_rate                             # peak information rate     [bytes/s]
+            pbs =  peak_queue_length * packet_size       # peak burst size           [bytes]
             yellow = (cir, cbs)
             red = (pir, pbs)
             controller.meter_array_set_rates("port_congestion_meter", [yellow, red])
@@ -162,6 +173,9 @@ class Controller(object):
         """Sniffs traffic coming from switches"""
         cpu_interfaces = [str(self.topo.get_cpu_port_intf(sw_name).replace("eth0", "eth1")) for sw_name in self.controllers]
         sniff(iface=cpu_interfaces, prn=self.process_packet)
+
+    
+
     
     def run(self):
         """Run function"""
