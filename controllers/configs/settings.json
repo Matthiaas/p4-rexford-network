@@ -1,10 +1,8 @@
 {
-    "commited_queue_length" : 1,
-    "commited_rate" : 1000,
-    "peak_queue_length" : 1,
-    "peak_rate" : 1000,
-
-    "packet_size" : 1700,
-
-    "heartbeat_freq" : 0.1
+    "commited_queue_length": 10,
+    "commited_rate": 1.25,
+    "peak_queue_length": 10,
+    "peak_rate": 1.25,
+    "packet_size": 1700,
+    "heartbeat_freq": 0.1
 }
