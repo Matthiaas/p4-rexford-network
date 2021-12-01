@@ -90,24 +90,42 @@ class Controller(object):
     def load_routing_table(self, routing_tables):
         for p4switch in self.topo.get_p4switches():
             rt = routing_tables[p4switch]
-            
+            ecmp_group_id = 0
             for host_name, routs in rt.items():
                 
-                host_addr = self.get_rexford_addr(host_name)
-                 # TODO: Use the nexthops for ECMP routing.
-                nexthops = routs["nexthops"]
-                nexthop = nexthops[0]
-                lfa = nexthops[1] if len(nexthops) > 1 else routs["lfa"]
-                nexthop_port = str(self.topo.node_to_node_port_num(p4switch, nexthop))
-                lfa_port = nexthop_port
-                if lfa != nexthop and lfa != "":
-                    lfa_port = str(self.topo.node_to_node_port_num(p4switch, lfa))
-                self.controllers[p4switch].table_add(
-                  "ipv4_forward", action_name="set_nhop", 
-                    match_keys=[host_addr], action_params=[nexthop_port])  
-                print("routes")
-                print([nexthop_port, lfa_port])
+                host_addr = self.get_rexford_addr(host_name)               
+                nexthopports = [ 
+                    str(self.topo.node_to_node_port_num(p4switch, nexthop)) 
+                        for nexthop in routs["nexthops"]]
 
+                # TODO: USE the lfa.
+                lfa = routs["lfa"]
+                if lfa != "":
+                    lfa_port = str(self.topo.node_to_node_port_num(p4switch, lfa))
+                else:
+                    lfa_port = "None" 
+                
+                print("Adding routes to:")
+                print([nexthopports, lfa_port])
+
+
+                if len(nexthopports) == 1:
+                    self.controllers[p4switch].table_add(
+                        "ipv4_forward", action_name="set_nhop", 
+                            match_keys=[host_addr], action_params=[nexthopports[0]])
+                else:
+                    self.controllers[p4switch].table_add(
+                        "ipv4_forward", action_name="ecmp_group", 
+                            match_keys=[host_addr], action_params=[str(ecmp_group_id), str(len(nexthopports))])
+                    port_hash = 0
+                    for nextport in nexthopports:
+                        self.controllers[p4switch].table_add(
+                            "ecmp_group_to_nhop", action_name="set_nhop", 
+                                match_keys=[str(ecmp_group_id), str(port_hash)], action_params=[nextport])
+                        port_hash = port_hash + 1 
+                    ecmp_group_id = ecmp_group_id + 1
+
+                
     def setup_routing_lfa(self, config_file):
         with open(config_file, 'r') as f:
             for entry in json.load(f)["map"]:

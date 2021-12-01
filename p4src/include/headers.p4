@@ -24,6 +24,8 @@ typedef bit<48> macAddr_t;
 typedef bit<4>  rexfordAddr_t;
 typedef bit<16> port_t;
 
+typedef bit<48> timestamp_t;
+typedef bit<16> flowlet_id_t;
 
 // Define headers
 struct host_port_t {
@@ -34,7 +36,7 @@ struct host_port_t {
 // Instantiate metadata fields
 struct metadata {
     rexfordAddr_t next_destination;
-    bit<3> traffic_class;
+    
     // Heartbeat and fail management stuff
     bit<1> linkState; //OK | FAIL
     bit<32> nextHop; // egress port for nh
@@ -42,6 +44,20 @@ struct metadata {
     bit<48> timestamp; //placeholder for reading last seen timestamp
 
     bit<2> congestion_tag;
+
+    port_t srcPort;
+    port_t dstPort;
+    bit<3> traffic_class;
+
+    // Flowlet
+    bit<14> ecmp_hash;
+    bit<14> ecmp_group_id;
+
+    bit<48> flowlet_last_stamp;
+    
+
+    bit<13> flowlet_register_index;
+    bit<16> flowlet_id;
 }
 
 header ethernet_t {
