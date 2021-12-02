@@ -4,6 +4,7 @@ from p4utils.utils.helper import load_topo
 from p4utils.utils.sswitch_thrift_API import SimpleSwitchThriftAPI
 from recovery import Fast_Recovery_Manager as FRM
 from heartbeat import HeartBeatGenerator as HBG
+from queulengthestimator import QueueLengthEstimator as QLE
 import json
 from scapy.all import *
 
@@ -23,6 +24,7 @@ class Controller(object):
         # Settings:
         self.settings = self.read_settings("controllers/configs/settings.json")
         self.hb_manager = HBG(self.settings["heartbeat_freq"], self.topo)
+        self.qle = None
         self.init()
 
     def read_settings(self, settings_filename):
@@ -67,12 +69,13 @@ class Controller(object):
         cont.table_add(
             "host_port_to_mac", action_name="reconstruct_packet", 
             match_keys=[host_port], action_params=[host_mac])
+        cont.register_write("host_port_reg", 0, int(host_port))
 
     def configure_host_address(self, p4switch):
         host_name = p4switch + "_h0"
         host_addr = self.get_rexford_addr(host_name)
         cont = self.controllers[p4switch]
-        cont.register_write("host_address", 0, int(host_addr))
+        cont.register_write("host_address_reg", 0, int(host_addr))
 
     def setup_way_points(self, way_point_file_name):
         wps = wpr.get_way_points(way_point_file_name)
@@ -98,30 +101,41 @@ class Controller(object):
                     str(self.topo.node_to_node_port_num(p4switch, nexthop)) 
                         for nexthop in routs["nexthops"]]
 
-                # TODO: USE the lfa.
                 lfa = routs["lfa"]
+                lfa_port = None
                 if lfa != "":
-                    lfa_port = str(self.topo.node_to_node_port_num(p4switch, lfa))
-                else:
-                    lfa_port = "None" 
+                    lfa_port = str(self.topo.node_to_node_port_num(p4switch, lfa))                 
                 
-                print("Adding routes to:")
+                print("Adding nexthops and lfa:")
                 print([nexthopports, lfa_port])
+
+                def add_set_next_hop(table_name, match_keys, next_port, lfa_port=None):
+                    if lfa_port:
+                        self.controllers[p4switch].table_add(
+                                table_name, action_name="set_nhop_and_lfa", 
+                                    match_keys=match_keys, action_params=[next_port, lfa_port])
+                    else: 
+                        self.controllers[p4switch].table_add(
+                                table_name, action_name="set_nhop", 
+                                    match_keys=match_keys, action_params=[next_port])
 
 
                 if len(nexthopports) == 1:
-                    self.controllers[p4switch].table_add(
-                        "ipv4_forward", action_name="set_nhop", 
-                            match_keys=[host_addr], action_params=[nexthopports[0]])
+                    add_set_next_hop("ipv4_forward", 
+                            match_keys=[host_addr], 
+                            next_port=nexthopports[0], 
+                            lfa_port=lfa_port)
                 else:
                     self.controllers[p4switch].table_add(
-                        "ipv4_forward", action_name="ecmp_group", 
+                            "ipv4_forward", 
+                            action_name="ecmp_group", 
                             match_keys=[host_addr], action_params=[str(ecmp_group_id), str(len(nexthopports))])
                     port_hash = 0
                     for nextport in nexthopports:
-                        self.controllers[p4switch].table_add(
-                            "ecmp_group_to_nhop", action_name="set_nhop", 
-                                match_keys=[str(ecmp_group_id), str(port_hash)], action_params=[nextport])
+                        add_set_next_hop("ecmp_group_to_nhop", 
+                            match_keys=[str(ecmp_group_id), str(port_hash)], 
+                            next_port=nextport, 
+                            lfa_port=lfa_port)
                         port_hash = port_hash + 1 
                     ecmp_group_id = ecmp_group_id + 1
 
@@ -206,6 +220,10 @@ class Controller(object):
         self.setup_meters()
         #start heartbeat traffic
         self.hb_manager.run()
+        #
+        self.qle = QLE(self.settings["queue_len_estimator_sample_freq"], self.controllers)
+        self.qle.run()
+        time.sleep(60)
 
 
     def main(self):

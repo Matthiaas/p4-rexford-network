@@ -55,9 +55,12 @@ struct metadata {
 
     bit<48> flowlet_last_stamp;
     
-
     bit<13> flowlet_register_index;
     bit<16> flowlet_id;
+
+    egressSpec_t lfa;
+
+    bool drop_packet;
 }
 
 header ethernet_t {

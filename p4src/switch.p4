@@ -26,7 +26,8 @@ control MyIngress(inout headers hdr,
                   inout metadata meta,
                   inout standard_metadata_t std_meta) {
 
-    register<bit<4>>(1) host_address;
+    register<bit<4>>(1) host_address_reg;
+    register<bit<9>>(1) host_port_reg;
 
     meter((bit<32>) MAX_PORTS, MeterType.bytes) port_congestion_meter;
     register<bit<2>>(MAX_PORTS) port_congestions;
@@ -36,8 +37,19 @@ control MyIngress(inout headers hdr,
     register<timestamp_t>(REGISTER_SIZE) flowlet_time_stamp;
 
 
+    // This is filled by the controller and uses the port_bytes_out information for it.
+    register<bit<32>>(MAX_PORTS) estimated_queue_len;
+
+    action random_drop(in bit<32> p) {
+        bit<32> random_t;
+        random(random_t, (bit<32>)0, (bit<32>)100);
+        if(random_t < p) {
+            meta.drop_packet = true;
+        } 
+    }
+
     action drop() {
-        mark_to_drop(std_meta);
+        meta.drop_packet = true;
         bit<64> dr;
         dropped.read(dr, 0);
         dropped.write(0, dr + 1);
@@ -52,9 +64,18 @@ control MyIngress(inout headers hdr,
         hdr.waypoint.waypoint = waypoint;
     }
 
+    
     action set_nhop(egressSpec_t port) {
         std_meta.egress_spec = port;
+        // This means there is no lfa.
+        meta.lfa = 0;
     }
+
+    action set_nhop_and_lfa(egressSpec_t port, egressSpec_t lfa) {
+        std_meta.egress_spec = port;
+        meta.lfa = lfa;
+    }
+
 
     action read_tcp_flowlet_registers(){
         //compute register index
@@ -117,6 +138,7 @@ control MyIngress(inout headers hdr,
         actions = {
             drop;
             set_nhop;
+            set_nhop_and_lfa;
         }
         size = 1024;
     }
@@ -125,6 +147,7 @@ control MyIngress(inout headers hdr,
         key = { meta.next_destination : exact; }
         actions =  {
             set_nhop;
+            set_nhop_and_lfa;
             ecmp_group;
             drop;
         }
@@ -193,10 +216,13 @@ control MyIngress(inout headers hdr,
 
     apply {
         set_traffic_class();
+        meta.drop_packet = false;
 
         // Read the address of the host.
         rexfordAddr_t host_addr;
-        host_address.read(host_addr, 0);
+        host_address_reg.read(host_addr, 0);
+        bit<9> host_port;
+        host_port_reg.read(host_port, 0);
 
         if(hdr.ethernet.isValid() && hdr.udp.isValid()) {
             meta.next_destination = (bit<4>) hdr.ipv4.dst_rexford_addr;   
@@ -259,8 +285,21 @@ control MyIngress(inout headers hdr,
         port_congestion_meter.execute_meter((bit<32>) std_meta.egress_spec, meta.congestion_tag);
         // TODO: This register is only for debug purpose. Delte sometime.
         port_congestions.write((bit<32>) std_meta.egress_spec, meta.congestion_tag);
-        if(meta.congestion_tag == V1MODEL_METER_COLOR_RED) {
+        if(meta.congestion_tag == V1MODEL_METER_COLOR_YELLOW) {
+            if(hdr.tcp.isValid()) {
+                random_drop(80);
+            } else  {
+                random_drop(20);
+            }
+            
+        } else if(meta.congestion_tag == V1MODEL_METER_COLOR_RED) {
            drop();
+        }
+
+
+        // Only drop if packet is not going to the host.
+        if (meta.drop_packet && std_meta.egress_spec != host_port) {
+            mark_to_drop(std_meta);
         }
     }
 
@@ -274,6 +313,8 @@ control MyIngress(inout headers hdr,
 control MyEgress(inout headers hdr,
                  inout metadata meta,
                  inout standard_metadata_t std_meta) {
+
+    counter(MAX_PORTS, CounterType.bytes) port_bytes_out;
     
     action reconstruct_packet(macAddr_t dstAddr) {
         // Ethernet:
@@ -327,6 +368,8 @@ control MyEgress(inout headers hdr,
 
     apply {
         host_port_to_mac.apply();
+
+        port_bytes_out.count((bit<32>) std_meta.egress_port);
     }
 }
 
