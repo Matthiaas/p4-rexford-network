@@ -7,6 +7,9 @@
 #include "include/parsers.p4"
 
 #define MAX_PORTS 10
+//#define THRESHOLD 48w1000000 // 1s 
+#define THRESHOLD_REC 48w300000 // 0.3s -> if we don't see traffic for more than > fail
+#define THRESHOLD_SENT 48w100000 // 0.1s -> if we haven't seen traffic for more than > send
 #define REGISTER_SIZE 8192
 #define FLOWLET_TIMEOUT 48w200000
 
@@ -40,6 +43,14 @@ control MyIngress(inout headers hdr,
     // This is filled by the controller and uses the port_bytes_out information for it.
     register<bit<32>>(MAX_PORTS) estimated_queue_len;
 
+    // port -> last seen timestamp for rec/sent packet
+    register<bit<48>>(MAX_PORTS) rec_tstp;
+    register<bit<48>>(MAX_PORTS) sent_tstp;
+    register<bit<9>>(MAX_PORTS) debug;
+
+    // port(link) -> 0(OK) | 1(FAIL)
+    register<bit<1>>(MAX_PORTS) linkState;
+
     action random_drop(in bit<32> p) {
         bit<32> random_t;
         random(random_t, (bit<32>)0, (bit<32>)100);
@@ -64,7 +75,23 @@ control MyIngress(inout headers hdr,
         hdr.waypoint.waypoint = waypoint;
     }
 
-    
+    //Heartbeat related actions
+    action get_rec_tstp_for_port(bit<9> port){
+        rec_tstp.read(meta.timestamp,(bit<32>)port);
+    }
+    action set_rec_tstp_for_port(bit<9> port){
+        rec_tstp.write((bit<32>)port, std_meta.ingress_global_timestamp);
+    }
+    action get_sent_tstp_for_port(bit<9> port){
+        sent_tstp.read(meta.timestamp,(bit<32>)port);
+    }
+    action set_sent_tstp_for_port(bit<9> port){
+        sent_tstp.write((bit<32>)port, std_meta.egress_global_timestamp);
+    }
+    action update_linkState(bit<9> port){
+        linkState.write((bit<32>)port, (bit<1>)1);
+    }
+
     action set_nhop(egressSpec_t port) {
         std_meta.egress_spec = port;
         // This means there is no lfa.
@@ -215,95 +242,126 @@ control MyIngress(inout headers hdr,
     }
 
     apply {
-        set_traffic_class();
-        meta.drop_packet = false;
-
-        // Read the address of the host.
-        rexfordAddr_t host_addr;
-        host_address_reg.read(host_addr, 0);
-        bit<9> host_port;
-        host_port_reg.read(host_port, 0);
-
-        if(hdr.ethernet.isValid() && hdr.udp.isValid()) {
-            meta.next_destination = (bit<4>) hdr.ipv4.dst_rexford_addr;   
-            // Maybe setup waypoint.
-            udp_waypoint.apply();           
-        }
-
-        bool reached_waypoint = false;
-        // Check if the packet is a waypointed one.
-        if (hdr.waypoint.isValid()) {
-            // Check if we reached the waypoint.
-            if (hdr.waypoint.waypoint == host_addr) {
-                // We reached the waypoint.
-                reached_waypoint = true;
-            }
-        }
-
-        if ((!hdr.waypoint.isValid() && hdr.ethernet.isValid()) || reached_waypoint) {
-            // Packet comes from host or reached the waypoint, remove the ethernet hdr.
-            // Only consider packets that come from a host that are not waypointed.
-
-            // First invalidate all unused headers.
-            hdr.ethernet.setInvalid();
-            hdr.ipv4.setInvalid();
-            hdr.waypoint.setInvalid();
-            construct_rexford_headers();
-        }
-
-        // This is used for the routing table lookup.
-        // Either rexford_ipv4 is valid or the next destination is a waypoint.
-        if (hdr.rexford_ipv4.isValid()) {
-            meta.next_destination = hdr.rexford_ipv4.dstAddr;
-        } else if(hdr.waypoint.isValid()) {
-            meta.next_destination = hdr.waypoint.waypoint;
-        }    
-
-        // Flowlet ECMP switching.
-        @atomic {
-            if (hdr.tcp.isValid()) {
-                read_tcp_flowlet_registers();
-
-                bit<48> flowlet_time_diff = std_meta.ingress_global_timestamp - meta.flowlet_last_stamp;
-
-                //check if inter-packet gap is > 100ms
-                if (flowlet_time_diff > FLOWLET_TIMEOUT){
-                    update_tcp_flowlet_id();
+        if (hdr.heartbeat.isValid()){
+            if (hdr.heartbeat.from_cp == 1){
+                // From cont -> check last rec timestamp
+                debug.write(0, hdr.heartbeat.port);
+                get_rec_tstp_for_port(hdr.heartbeat.port);
+                if (meta.timestamp != 0 && (std_meta.ingress_global_timestamp - meta.timestamp > THRESHOLD_REC)){
+                    //Update linkstate -> notify cont
+                    update_linkState(hdr.heartbeat.port);
+                    clone(CloneType.I2E, 100);
+                }
+                //check last time we sent something to this port
+                get_sent_tstp_for_port(hdr.heartbeat.port);
+                if (meta.timestamp != 0 && (std_meta.egress_global_timestamp - meta.timestamp > THRESHOLD_SENT)){
+                    //Send heartbeat to port
+                    hdr.heartbeat.from_cp = 0;
+                    set_sent_tstp_for_port(hdr.heartbeat.port);
+                    std_meta.egress_spec = hdr.heartbeat.port;
+                } else {
+                    // no need to forward the heartbeat
+                    debug.write(1, (bit<9>)1);
+                    drop();
                 }
             } else {
-                update_udp_flowlet_id();
+                // From neigh -> update last seen timestamp
+                set_rec_tstp_for_port(std_meta.ingress_port);
+                debug.write(2, std_meta.ingress_port);
+                drop();
             }
-        }
+        } else {
+        //Normal traffic
+            set_rec_tstp_for_port(std_meta.ingress_port);
+            set_traffic_class();
+            meta.drop_packet = false;
 
-        switch (ipv4_forward.apply().action_run){
-            ecmp_group: {
-                ecmp_group_to_nhop.apply();
+            // Read the address of the host.
+            rexfordAddr_t host_addr;
+            host_address_reg.read(host_addr, 0);
+            bit<9> host_port;
+            host_port_reg.read(host_port, 0);
+
+            if(hdr.ethernet.isValid() && hdr.udp.isValid()) {
+                meta.next_destination = (bit<4>) hdr.ipv4.dst_rexford_addr;   
+                // Maybe setup waypoint.
+                udp_waypoint.apply();           
             }
-        }
 
-
-        port_congestion_meter.execute_meter((bit<32>) std_meta.egress_spec, meta.congestion_tag);
-        // TODO: This register is only for debug purpose. Delte sometime.
-        port_congestions.write((bit<32>) std_meta.egress_spec, meta.congestion_tag);
-        if(meta.congestion_tag == V1MODEL_METER_COLOR_YELLOW) {
-            if(hdr.tcp.isValid()) {
-                random_drop(80);
-            } else  {
-                random_drop(20);
+            bool reached_waypoint = false;
+            // Check if the packet is a waypointed one.
+            if (hdr.waypoint.isValid()) {
+                // Check if we reached the waypoint.
+                if (hdr.waypoint.waypoint == host_addr) {
+                    // We reached the waypoint.
+                    reached_waypoint = true;
+                }
             }
-            
-        } else if(meta.congestion_tag == V1MODEL_METER_COLOR_RED) {
-           drop();
-        }
+
+            if ((!hdr.waypoint.isValid() && hdr.ethernet.isValid()) || reached_waypoint) {
+                // Packet comes from host or reached the waypoint, remove the ethernet hdr.
+                // Only consider packets that come from a host that are not waypointed.
+
+                // First invalidate all unused headers.
+                hdr.ethernet.setInvalid();
+                hdr.ipv4.setInvalid();
+                hdr.waypoint.setInvalid();
+                construct_rexford_headers();
+            }
+
+            // This is used for the routing table lookup.
+            // Either rexford_ipv4 is valid or the next destination is a waypoint.
+            if (hdr.rexford_ipv4.isValid()) {
+                meta.next_destination = hdr.rexford_ipv4.dstAddr;
+            } else if(hdr.waypoint.isValid()) {
+                meta.next_destination = hdr.waypoint.waypoint;
+            }    
+
+            // Flowlet ECMP switching.
+            @atomic {
+                if (hdr.tcp.isValid()) {
+                    read_tcp_flowlet_registers();
+
+                    bit<48> flowlet_time_diff = std_meta.ingress_global_timestamp - meta.flowlet_last_stamp;
+
+                    //check if inter-packet gap is > 100ms
+                    if (flowlet_time_diff > FLOWLET_TIMEOUT){
+                        update_tcp_flowlet_id();
+                    }
+                } else {
+                    update_udp_flowlet_id();
+                }
+            }
+
+            switch (ipv4_forward.apply().action_run){
+                ecmp_group: {
+                    ecmp_group_to_nhop.apply();
+                }
+            }
 
 
-        // Only drop if packet is not going to the host.
-        if (meta.drop_packet && std_meta.egress_spec != host_port) {
-            mark_to_drop(std_meta);
+            port_congestion_meter.execute_meter((bit<32>) std_meta.egress_spec, meta.congestion_tag);
+            // TODO: This register is only for debug purpose. Delte sometime.
+            port_congestions.write((bit<32>) std_meta.egress_spec, meta.congestion_tag);
+            if(meta.congestion_tag == V1MODEL_METER_COLOR_YELLOW) {
+                if(hdr.tcp.isValid()) {
+                    random_drop(80);
+                } else  {
+                    random_drop(20);
+                }
+
+            } else if(meta.congestion_tag == V1MODEL_METER_COLOR_RED) {
+               drop();
+            }
+            // Only drop if packet is not going to the host.
+            if (meta.drop_packet && std_meta.egress_spec != host_port) {
+                mark_to_drop(std_meta);
+            }
+            if (!meta.drop_packet){
+                set_sent_tstp_for_port(std_meta.egress_spec);
+            }
         }
     }
-
-    
 }
 
 /*************************************************************************
@@ -368,8 +426,12 @@ control MyEgress(inout headers hdr,
 
     apply {
         host_port_to_mac.apply();
-
-        port_bytes_out.count((bit<32>) std_meta.egress_port);
+        if (hdr.heartbeat.isValid() && std_meta.instance_type == 1){
+            // set failed link flag for the clone we send to the cp
+            hdr.heartbeat.failed_link = 1;
+        } else {
+            port_bytes_out.count((bit<32>) std_meta.egress_port);
+        }
     }
 }
 
