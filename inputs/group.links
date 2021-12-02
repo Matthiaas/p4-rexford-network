@@ -1,0 +1,4 @@
+src_switch, dst_switch, bw
+PAR, MAD, 10
+POR, PAR, 10
+MAD, AMS, 10
