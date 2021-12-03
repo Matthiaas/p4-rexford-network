@@ -6,12 +6,12 @@
 #include "include/headers.p4"
 #include "include/parsers.p4"
 
-#define MAX_PORTS 10
+#define MAX_PORTS 11
 //#define THRESHOLD 48w1000000 // 1s 
-#define THRESHOLD_REC 48w300000 // 0.3s -> if we don't see traffic for more than > fail
-#define THRESHOLD_SENT 48w100000 // 0.1s -> if we haven't seen traffic for more than > send
+#define THRESHOLD_REC 48w600000 // 0.6s -> if we don't see traffic for more than > fail
+#define THRESHOLD_SENT 48w200000 // 0.2s -> if we haven't seen traffic for more than > send
 #define REGISTER_SIZE 8192
-#define FLOWLET_TIMEOUT 48w200000
+#define FLOWLET_TIMEOUT 48w200000 // 0.2s
 
 /*************************************************************************
 ************   C H E C K S U M    V E R I F I C A T I O N   *************
@@ -86,7 +86,7 @@ control MyIngress(inout headers hdr,
         sent_tstp.read(meta.timestamp,(bit<32>)port);
     }
     action set_sent_tstp_for_port(bit<9> port){
-        sent_tstp.write((bit<32>)port, std_meta.egress_global_timestamp);
+        sent_tstp.write((bit<32>)port, std_meta.ingress_global_timestamp);
     }
     action update_linkState(bit<9> port){
         linkState.write((bit<32>)port, (bit<1>)1);
@@ -117,7 +117,7 @@ control MyIngress(inout headers hdr,
             },
             (bit<14>)8192);
 
-         //Read previous time stamp
+        //Read previous time stamp
         flowlet_time_stamp.read(meta.flowlet_last_stamp, (bit<32>)meta.flowlet_register_index);
 
         //Read previous flowlet id
@@ -219,7 +219,7 @@ control MyIngress(inout headers hdr,
             meta.dstPort = hdr.udp.dstPort;
         } 
 
-        if( !hdr.tcp.isValid() && !hdr.udp.isValid()) {
+        if(!hdr.tcp.isValid() && !hdr.udp.isValid()) {
             // Internal traffic like heartbeats.
             meta.traffic_class = 0;
         } else if( meta.srcPort <= 100 && meta.dstPort <= 100) {
@@ -245,7 +245,7 @@ control MyIngress(inout headers hdr,
         if (hdr.heartbeat.isValid()){
             if (hdr.heartbeat.from_cp == 1){
                 // From cont -> check last rec timestamp
-                debug.write(0, hdr.heartbeat.port);
+                
                 get_rec_tstp_for_port(hdr.heartbeat.port);
                 if (meta.timestamp != 0 && (std_meta.ingress_global_timestamp - meta.timestamp > THRESHOLD_REC)){
                     //Update linkstate -> notify cont
@@ -253,25 +253,24 @@ control MyIngress(inout headers hdr,
                     clone(CloneType.I2E, 100);
                 }
                 //check last time we sent something to this port
-                get_sent_tstp_for_port(hdr.heartbeat.port);
-                if (meta.timestamp != 0 && (std_meta.egress_global_timestamp - meta.timestamp > THRESHOLD_SENT)){
+                get_sent_tstp_for_port(hdr.heartbeat.port); 
+                if (std_meta.ingress_global_timestamp - meta.timestamp > THRESHOLD_SENT){
                     //Send heartbeat to port
                     hdr.heartbeat.from_cp = 0;
                     set_sent_tstp_for_port(hdr.heartbeat.port);
                     std_meta.egress_spec = hdr.heartbeat.port;
                 } else {
-                    // no need to forward the heartbeat
-                    debug.write(1, (bit<9>)1);
+                    // no need to forward the heartbeat -> drop
                     drop();
                 }
             } else {
                 // From neigh -> update last seen timestamp
                 set_rec_tstp_for_port(std_meta.ingress_port);
-                debug.write(2, std_meta.ingress_port);
                 drop();
             }
         } else {
         //Normal traffic
+
             set_rec_tstp_for_port(std_meta.ingress_port);
             set_traffic_class();
             meta.drop_packet = false;
@@ -373,6 +372,7 @@ control MyEgress(inout headers hdr,
                  inout standard_metadata_t std_meta) {
 
     counter(MAX_PORTS, CounterType.bytes) port_bytes_out;
+
     
     action reconstruct_packet(macAddr_t dstAddr) {
         // Ethernet:
@@ -431,6 +431,7 @@ control MyEgress(inout headers hdr,
             hdr.heartbeat.failed_link = 1;
         } else {
             port_bytes_out.count((bit<32>) std_meta.egress_port);
+
         }
     }
 }

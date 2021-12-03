@@ -178,7 +178,9 @@ class Controller(object):
 
         interface = pkt.sniffed_on
         switch_name = interface.split("-")[0]
-        packet = Ether(raw(pkt))
+        packet = raw(pkt)
+        print(f"Failure: {packet}")
+
         # check if it is a heartbeat packet
         if packet.type == 0x1234:
             # parse the heartbeat header
@@ -206,9 +208,6 @@ class Controller(object):
         cpu_interfaces = [str(self.topo.get_cpu_port_intf(sw_name).replace("eth0", "eth1")) for sw_name in self.controllers]
         sniff(iface=cpu_interfaces, prn=self.process_packet)
 
-    
-
-    
     def run(self):
         """Run function"""
         # Setup tables and varsets.
@@ -218,12 +217,10 @@ class Controller(object):
         self.setup_way_points("controllers/configs/full.slas")
         self.setup_routing_lfa("controllers/configs/link_failure_map_generated.json")
         self.setup_meters()
-        #start heartbeat traffic
-        self.hb_manager.run()
-        #
         self.qle = QLE(self.settings["queue_len_estimator_sample_freq"], self.controllers)
         self.qle.run()
-        time.sleep(60)
+        #start heartbeat traffic
+        self.hb_manager.run()
 
 
     def main(self):

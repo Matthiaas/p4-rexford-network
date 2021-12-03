@@ -17,14 +17,14 @@ from p4utils.utils.sswitch_thrift_API import SimpleSwitchThriftAPI
 
 def build_packet(src_mac, dst_mac, heartbeat_port):
     """Builds raw heart beat packet to send to switches"""
-    # ethernet
-    src_bytes = b"".join([codecs.decode(x,'hex') for x in src_mac.split(":")])
-    dst_bytes = b"".join([codecs.decode(x,'hex') for x in dst_mac.split(":")])
-    eth = src_bytes + dst_bytes + struct.pack("!H", 0x1234)
-    print(f"from {src_mac} to {dst_mac} via {heartbeat_port}")
-    heartbeat = heartbeat_port << 7 | (1 << 6) # port | cpu_bit
-    heartbeat = struct.pack("!H", heartbeat)
-    return eth + heartbeat
+    heartbeat_port = format(heartbeat_port, '09b')
+    from_cp = '1'
+    pad = '0' * 86
+    eth = format(0x1234, '016b')
+    pkt = heartbeat_port + from_cp + pad + eth
+    pkt = int(pkt, 2).to_bytes(14, byteorder='big')
+    heartbeat = struct.pack("!14s", pkt)
+    return heartbeat
 
 def send_thread(intf_name, neighs_src_dst_port, time_interval):
     #intf_name = tup[0]
@@ -66,12 +66,13 @@ class HeartBeatGenerator(object):
                 src_mac = self.topo.node_to_node_mac(switch, neighbor_switch)
                 dst_mac = self.topo.node_to_node_mac(neighbor_switch, switch)
                 neighs_src_dst_port.append((src_mac, dst_mac, sw_port))
-                if neighbor_switch == "PAR":
-                    print(switch)
+                #if neighbor_switch == "PAR":
+                #    print(switch)
             all_neighs.append(neighs_src_dst_port)
         
         args = [(self.topo.get_cpu_port_intf(switch), all_neighs[i], self.time_interval) for i,switch in enumerate(self.topo.get_p4switches())]
         for i in range(0,len(args)):
+            # each thread is responsible for sending heartbeat from switch to ALL its neighs (~ N.switch threads)
             t = threading.Thread(target=send_thread, args=(args[i]), daemon=True)
             t.start()
             # save all threads (currently not used)

@@ -70,10 +70,11 @@ header ethernet_t {
 }
 
 header heartbeat_t {
-    bit<9>    port;
-    bit<1>    from_cp;
-    bit<1>    failed_link;
-    bit<5>    padding;
+    bit<9> port;
+    bit<1> from_cp;
+    bit<1> failed_link;
+    bit<85> padding;
+    bit<16> etherType;
 }
 
 header waypoint_t {

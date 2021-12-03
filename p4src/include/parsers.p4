@@ -93,6 +93,7 @@ control MyDeparser(packet_out packet, in headers hdr) {
         // The ethernet part of the packet will not be valid for internal 
         // traffic.
         packet.emit(hdr.ethernet);
+        packet.emit(hdr.heartbeat);
         packet.emit(hdr.ipv4);
         packet.emit(hdr.waypoint);
         packet.emit(hdr.rexford_ipv4);
