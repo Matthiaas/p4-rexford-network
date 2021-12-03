@@ -250,6 +250,7 @@ control MyIngress(inout headers hdr,
                 if (meta.timestamp != 0 && (std_meta.ingress_global_timestamp - meta.timestamp > THRESHOLD_REC)){
                     //Update linkstate -> notify cont
                     update_linkState(hdr.heartbeat.port);
+                    hdr.heartbeat.failed_link = 1;
                     clone(CloneType.I2E, 100);
                 }
                 //check last time we sent something to this port

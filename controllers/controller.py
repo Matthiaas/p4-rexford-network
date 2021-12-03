@@ -19,12 +19,13 @@ class Controller(object):
         self.topo = load_topo('topology.json')
         self.controllers = {}
         self.failure_rts = {}
+        self.failed_links = set()
         # TODO: Uncomment when it works.
         # self.recovery_manager = FRM(self.topo, 'example_link_failure_map.json')
         # Settings:
         self.settings = self.read_settings("controllers/configs/settings.json")
         self.hb_manager = HBG(self.settings["heartbeat_freq"], self.topo)
-        self.qle = None
+        self.qle = QLE(self.settings["queue_len_estimator_sample_freq"], self.controllers)
         self.init()
 
     def read_settings(self, settings_filename):
@@ -173,25 +174,23 @@ class Controller(object):
             thrift_port = self.topo.get_thrift_port(p4switch)
             self.controllers[p4switch] = SimpleSwitchThriftAPI(thrift_port)
 
+    def set_mirroring_sessions(self):
+        for p4switch in self.topo.get_p4switches():
+            cpu_port = self.topo.get_cpu_port_index(p4switch)
+            self.controllers[p4switch].mirroring_add(100, cpu_port)
+
     def process_packet(self, pkt):
         """Processes received packets to detect failure notifications"""
 
         interface = pkt.sniffed_on
         switch_name = interface.split("-")[0]
-        packet = raw(pkt)
-        print(f"Failure: {packet}")
-
-        # check if it is a heartbeat packet
-        if packet.type == 0x1234:
-            # parse the heartbeat header
-            payload = struct.unpack("!H", packet.payload.load)[0]
-            failed_flag = (payload & 0x0020) >> 5
-            port = (payload & 0xff80) >> 7
-
-            # only if it is a failure notification packet.
-            if failed_flag == 1:
-                # get port
-                port = (payload & 0xff80) >> 7
+        pkt_raw = raw(pkt)
+        pkt_bin = format(int.from_bytes(pkt, byteorder='big'), '0112b')
+        eth_type = int(pkt_bin[-16:], 2)
+        if eth_type == 4660:
+            port = int(pkt_bin[0:9],2)
+            failed = int(pkt_bin[10],2)
+            if failed == 1:
                 # get other side of the link using port
                 neighbor = self.topo.port_to_node(switch_name, port)
                 # detect the failed link
@@ -200,12 +199,11 @@ class Controller(object):
                 if failed_link not in self.failed_links:
                     print("Notification for link failure {} received", format(failed_link))
                     self.failed_links.add(failed_link)
-                    print("Updating for link failure {}".format(self.failed_links))
-                    self.failure_notification(list(self.failed_links))
 
     def run_cpu_port_loop(self):
         """Sniffs traffic coming from switches"""
         cpu_interfaces = [str(self.topo.get_cpu_port_intf(sw_name).replace("eth0", "eth1")) for sw_name in self.controllers]
+        print(cpu_interfaces)
         sniff(iface=cpu_interfaces, prn=self.process_packet)
 
     def run(self):
@@ -217,10 +215,15 @@ class Controller(object):
         self.setup_way_points("controllers/configs/full.slas")
         self.setup_routing_lfa("controllers/configs/link_failure_map_generated.json")
         self.setup_meters()
-        self.qle = QLE(self.settings["queue_len_estimator_sample_freq"], self.controllers)
+
+        # Configure mirroring session to cpu port for failure notifications
+        self.set_mirroring_sessions()
         self.qle.run()
         #start heartbeat traffic
         self.hb_manager.run()
+        self.run_cpu_port_loop()
+        time.sleep(1000000)
+
 
 
     def main(self):

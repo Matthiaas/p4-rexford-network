@@ -80,4 +80,3 @@ class HeartBeatGenerator(object):
         #with Pool(16) as p:
         #    args = [(self.topo.get_cpu_port_intf(switch), all_neighs[i], self.time_interval) for i,switch in enumerate(self.topo.get_p4switches())]
         #    p.imap_unordered(send_thread, args)
-        time.sleep(1000000000) #sleep forever
