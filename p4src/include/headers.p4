@@ -39,9 +39,12 @@ struct metadata {
     
     // Heartbeat and fail management stuff
     bit<1> linkState; //OK | FAIL
-    bit<32> nextHop; // egress port for nh
-    bit<32> index; // TBD
     bit<48> timestamp; //placeholder for reading last seen timestamp
+
+    //placeholders for cloning
+    bit<9> hb_port;
+    bit<1> hb_failed_link; 
+    bit<1> hb_recovered_link;
 
     bit<2> congestion_tag;
 
@@ -73,7 +76,8 @@ header heartbeat_t {
     bit<9> port;
     bit<1> from_cp;
     bit<1> failed_link;
-    bit<85> padding;
+    bit<1> recovered_link;
+    bit<84> padding;
     bit<16> etherType;
 }
 

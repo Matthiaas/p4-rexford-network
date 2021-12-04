@@ -190,6 +190,7 @@ class Controller(object):
         if eth_type == 4660:
             port = int(pkt_bin[0:9],2)
             failed = int(pkt_bin[10],2)
+            recovered = int(pkt_bin[11],2)
             if failed == 1:
                 # get other side of the link using port
                 neighbor = self.topo.port_to_node(switch_name, port)
@@ -197,8 +198,31 @@ class Controller(object):
                 failed_link = tuple(sorted([switch_name, neighbor]))
                 # if it is not a duplicated notification
                 if failed_link not in self.failed_links:
+                    print(f"fail {switch_name} {neighbor} {port}")
                     print("Notification for link failure {} received", format(failed_link))
                     self.failed_links.add(failed_link)
+                    try:
+                        self.load_routing_table(self.failure_rts[frozenset(self.failed_links)])
+                    except KeyError:
+                        # TO DO: maybe handle the scenario not found, i.e compute on the flight?
+                        #raise ScenarioNotFound()
+                        pass
+            if recovered == 1:
+                neighbor = self.topo.port_to_node(switch_name, port)
+                # detect the failed link
+                failed_link = tuple(sorted([switch_name, neighbor]))
+                print(f"Switch {switch_name} neigh {neighbor} port {port}")
+                print("Notification for link restored {} received", format(failed_link))
+                if failed_link in self.failed_links:
+                    self.failed_links.remove(failed_link)
+                    try:
+                        self.load_routing_table(self.failure_rts[frozenset(self.failed_links)])
+                    except KeyError:
+                        # TO DO: maybe able the scenario not found, i.e compute on the flight?
+                        raise ScenarioNotFound()
+                else:
+                    raise FailedLinkNotFound()
+
 
     def run_cpu_port_loop(self):
         """Sniffs traffic coming from switches"""
