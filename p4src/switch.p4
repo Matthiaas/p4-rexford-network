@@ -53,6 +53,8 @@ control MyIngress(inout headers hdr,
 
     // port(link) -> 0(OK) | 1(FAIL)
     register<bit<1>>(MAX_PORTS) linkState;
+    register<bit<1>>(MAX_PORTS) debug;
+
 
     action random_drop(in bit<32> p) {
         bit<32> random_t;
@@ -208,8 +210,44 @@ control MyIngress(inout headers hdr,
         default_action = NoAction();
     }
 
-    // Actions for the main Ingresspipeline:
+    action set_nexthop_lfa_rlfa(rexfordAddr_t rlfa_host, egressSpec_t rlfa_port){
+        //to be called after ipv4_forward
+        //check the status of nexthop link and decide wt to use lfa or rlfa
+        check_linkState(std_meta.egress_spec);
+        if (meta.linkState == 1){
+            //debug.write((bit<32>)1,(bit<1>)1);
+            //nexthop link down -> protect...
+            //using lfa
+            if (meta.lfa != 0){
+                std_meta.egress_spec = meta.lfa;
+            }
+            //using rlfa
+            else if (rlfa_port != 0){
+                std_meta.egress_spec = rlfa_port;
+                if (hdr.rexford_ipv4.isValid()){
+                    hdr.rexford_ipv4.original_dstAddr = meta.next_destination;
+                    hdr.rexford_ipv4.dstAddr = rlfa_host;
+                    hdr.rexford_ipv4.rlfa_protected = 1;
+                }
+                else if (hdr.waypoint.isValid()){
+                    hdr.waypoint.original_dstAddr = meta.next_destination;
+                    hdr.waypoint.waypoint = rlfa_host;
+                    hdr.waypoint.rlfa_protected = 1;
+                }
+            }
+        }
+    }
 
+    table final_forward{
+        key = {std_meta.egress_spec: exact;}
+        actions = {
+            set_nexthop_lfa_rlfa;
+            NoAction;
+        }
+        size = MAX_PORTS;
+        default_action = NoAction();
+    }
+    // Actions for the main Ingresspipeline:
     action set_meta_ports() {
         if (hdr.tcp.isValid()) {
             meta.srcPort = hdr.tcp.srcPort;
@@ -325,7 +363,7 @@ control MyIngress(inout headers hdr,
                     std_meta.egress_spec = hdr.heartbeat.port;
                 } else {
                     // no need to forward the heartbeat -> drop
-                    drop();
+                    meta.drop_packet = true;
                 }
             } else {
                 // From neigh -> update last seen timestamp
@@ -338,6 +376,9 @@ control MyIngress(inout headers hdr,
                     meta.hb_recovered_link = 1;
                     clone3(CloneType.I2E, 100, meta);
                 }
+                meta.drop_packet = true;
+            }
+            if (meta.drop_packet == true){
                 drop();
             }
         } else {
@@ -352,6 +393,29 @@ control MyIngress(inout headers hdr,
 
             host_address_reg.read(host_addr, 0);
             host_port_reg.read(host_port, 0);
+
+            // first thing first, check if packet is protected
+            if (hdr.rexford_ipv4.isValid()){
+                debug.write((bit<32>)0,(bit<1>)1);
+                if (hdr.rexford_ipv4.rlfa_protected == 1){
+                    if (hdr.rexford_ipv4.dstAddr == host_addr){
+                        // reached rlfa -> set real destination
+                        hdr.rexford_ipv4.dstAddr = hdr.rexford_ipv4.original_dstAddr;
+                        hdr.rexford_ipv4.rlfa_protected = 0;
+                    }
+                }
+            }
+
+            if (hdr.waypoint.isValid()){
+                debug.write((bit<32>)1,(bit<1>)1);
+                if (hdr.waypoint.rlfa_protected == 1){
+                    if (hdr.waypoint.waypoint == host_addr){
+                        // reached rlfa -> set real destination
+                        hdr.waypoint.waypoint = hdr.waypoint.original_dstAddr;
+                        hdr.waypoint.rlfa_protected = 0;
+                    }
+                }
+            }
 
             set_meta_ports();
 
@@ -375,6 +439,7 @@ control MyIngress(inout headers hdr,
                 // Packet comes from host or just reached the waypoint here.
                 // Only consider packets that come from a host that are not waypointed.
                 // This is because waypointed traffic is not allowed to change the headers to be recognised by the tests.
+                debug.write((bit<32>)2,(bit<1>)1);
                 construct_rexford_headers();
             }
 
@@ -412,6 +477,8 @@ control MyIngress(inout headers hdr,
                     ecmp_group_to_nhop.apply();
                 }
             }
+            //check nexthop status and in case route using the lfa or rlfa
+            final_forward.apply();
             
             // This applies the meter. 
             // - Yellow: Defines a threshold where we drop a single packet in order to make sure the TCP flow does not 
@@ -419,7 +486,7 @@ control MyIngress(inout headers hdr,
             //            https://www.researchgate.net/publication/301857331_Global_Synchronization_Protection_for_Bandwidth_Sharing_TCP_Flows_in_High-Speed_Links
             // - Red: We exceed the max bandwith with the max queulength 
             //      --> We are forced to drop every packet to not increase the delay by to much. 
-            // (This can not be put into its own action since its conditionally calls actions.)
+            // (This can not be put into its own action since it conditionally calls actions.) -> We can feel the pain
             bit<2> congestion_tag;
             port_congestion_meter.execute_meter((bit<32>) std_meta.egress_spec, congestion_tag);
             if(congestion_tag == V1MODEL_METER_COLOR_YELLOW) {
@@ -437,7 +504,6 @@ control MyIngress(inout headers hdr,
             }
 
             drop_based_on_queue_length_and_traffic_class();
-            
          
             // Only drop if packet is not going to the host.
             if (meta.drop_packet && std_meta.egress_spec != host_port) {

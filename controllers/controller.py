@@ -18,8 +18,9 @@ class Controller(object):
         self.base_traffic_file = base_traffic
         self.topo = load_topo('topology.json')
         self.controllers = {}
-        self.failure_rts = {}
-        self.failed_links = set()
+        self.failure_rts = {}# failures -> routing_tbl
+        self.failure_rlfas = {} # failures -> Rlfas
+        self.failed_links = set() #current set of failed links
         # TODO: Uncomment when it works.
         # self.recovery_manager = FRM(self.topo, 'example_link_failure_map.json')
         # Settings:
@@ -48,7 +49,9 @@ class Controller(object):
         return str(host_port), host_mac
 
     def get_switch_of_host(self, host_name):
-            return host_name.split("_")[0]
+        return host_name.split("_")[0]
+    def get_host_of_switch(self, sw_name):
+        return sw_name+"_h0"
 
     def get_rexford_addr(self, host_name):
         switch_name = self.get_switch_of_host(host_name)
@@ -91,12 +94,28 @@ class Controller(object):
                 "udp_waypoint", action_name="set_waypoint", 
                 match_keys=[dst_addr], action_params=[wp_addr])
 
-    def load_routing_table(self, routing_tables):
+
+    
+
+
+    def load_routing_table(self, routing_tables, Rlfas):
+        """Loads a routing table from the self.failure_rts struct and self.failures_rlfas"""
+        
+        # maps refxord addr or ecmp group to nexthop port and lfa if possible
+        def add_set_next_hop(table_name, match_keys, next_port, lfa_port=None):
+            if lfa_port:
+                self.controllers[p4switch].table_add(
+                        table_name, action_name="set_nhop_and_lfa", 
+                            match_keys=match_keys, action_params=[next_port, lfa_port])
+            else: 
+                self.controllers[p4switch].table_add(
+                        table_name, action_name="set_nhop", 
+                            match_keys=match_keys, action_params=[next_port])
+        
         for p4switch in self.topo.get_p4switches():
             rt = routing_tables[p4switch]
             ecmp_group_id = 0
             for host_name, routs in rt.items():
-                
                 host_addr = self.get_rexford_addr(host_name)               
                 nexthopports = [ 
                     str(self.topo.node_to_node_port_num(p4switch, nexthop)) 
@@ -109,18 +128,7 @@ class Controller(object):
                 
                 print("Adding nexthops and lfa:")
                 print([nexthopports, lfa_port])
-
-                def add_set_next_hop(table_name, match_keys, next_port, lfa_port=None):
-                    if lfa_port:
-                        self.controllers[p4switch].table_add(
-                                table_name, action_name="set_nhop_and_lfa", 
-                                    match_keys=match_keys, action_params=[next_port, lfa_port])
-                    else: 
-                        self.controllers[p4switch].table_add(
-                                table_name, action_name="set_nhop", 
-                                    match_keys=match_keys, action_params=[next_port])
-
-
+            
                 if len(nexthopports) == 1:
                     add_set_next_hop("ipv4_forward", 
                             match_keys=[host_addr], 
@@ -133,20 +141,40 @@ class Controller(object):
                             match_keys=[host_addr], action_params=[str(ecmp_group_id), str(len(nexthopports))])
                     port_hash = 0
                     for nextport in nexthopports:
+                        # Why are we setting lfa if ecmp?
                         add_set_next_hop("ecmp_group_to_nhop", 
                             match_keys=[str(ecmp_group_id), str(port_hash)], 
                             next_port=nextport, 
                             lfa_port=lfa_port)
                         port_hash = port_hash + 1 
                     ecmp_group_id = ecmp_group_id + 1
+                
+            #set Rlfas
+            for neigh, rlfa in Rlfas[p4switch].items():
+                if rlfa != "":
+                    link_port = self.topo.node_to_node_port_num(p4switch, neigh)
+                    rlfa_host = self.get_rexford_addr(self.get_host_of_switch(rlfa))
+                    rlfa_host_nexthops = rt[self.get_host_of_switch(rlfa)]["nexthops"]
+                    rlfa_port = 0
+                    for nh in rlfa_host_nexthops:
+                        if nh != neigh:
+                            rlfa_port = self.topo.node_to_node_port_num(p4switch, nh)
+                    print(f"Adding Rlfa link {p4switch}--{neigh} rlfa: {rlfa} port: {rlfa_port}")
+                    self.controllers[p4switch].table_add(\
+                            table_name="final_forward",
+                            action_name="set_nexthop_lfa_rlfa",
+                            match_keys=[str(link_port)],
+                            action_params=[rlfa_host, str(rlfa_port)])
 
                 
-    def setup_routing_lfa(self, config_file):
+    def load_routing_lfa(self, config_file):
+        """Loads routing table from config: failures -> routing_tbl, Rlfas"""
         with open(config_file, 'r') as f:
             for entry in json.load(f)["map"]:
                 failures = frozenset(entry["failures"])
                 self.failure_rts[failures] = entry["routing_tbl"]
-        self.load_routing_table(self.failure_rts[frozenset()])
+                self.failure_rlfas[failures] = entry["Rlfas"]
+        self.load_routing_table(self.failure_rts[frozenset()], self.failure_rlfas[frozenset()])
                 
 
     def setup_meters(self):
@@ -166,6 +194,7 @@ class Controller(object):
             yellow = (cir, cbs)
             red = (pir, pbs)
             controller.meter_array_set_rates("port_congestion_meter", [yellow, red])
+
 
     def connect_to_switches(self):
         """Connects to switches"""
@@ -223,7 +252,6 @@ class Controller(object):
                 else:
                     raise FailedLinkNotFound()
 
-
     def run_cpu_port_loop(self):
         """Sniffs traffic coming from switches"""
         cpu_interfaces = [str(self.topo.get_cpu_port_intf(sw_name).replace("eth0", "eth1")) for sw_name in self.controllers]
@@ -237,7 +265,7 @@ class Controller(object):
             self.configure_host_port(p4switch)
             self.configure_host_address(p4switch)
         self.setup_way_points("controllers/configs/full.slas")
-        self.setup_routing_lfa("controllers/configs/link_failure_map_generated.json")
+        self.load_routing_lfa("controllers/configs/link_failure_map_generated.json")
         self.setup_meters()
 
         # Configure mirroring session to cpu port for failure notifications
@@ -247,7 +275,6 @@ class Controller(object):
         self.hb_manager.run()
         self.run_cpu_port_loop()
         time.sleep(1000000)
-
 
 
     def main(self):

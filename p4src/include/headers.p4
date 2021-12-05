@@ -87,7 +87,9 @@ header heartbeat_t {
 
 header waypoint_t {
     rexfordAddr_t waypoint;
-    bit<4> padding;
+    rexfordAddr_t original_dstAddr;
+    bit<1> rlfa_protected;
+    bit<7> padding;
 }
 
 // Size = 9 B
@@ -103,7 +105,9 @@ header rexford_ipv4_t {
     bit<16>   hdrChecksum;  // 60
     rexfordAddr_t srcAddr;  // 64
     rexfordAddr_t dstAddr;  // 68
-    bit<28>   padding2;     // 96
+    rexfordAddr_t original_dstAddr; //72
+    bit<1> rlfa_protected;  //73
+    bit<23>   padding2;     // 96
     bit<16>   etherType;    // 112
 }
 
