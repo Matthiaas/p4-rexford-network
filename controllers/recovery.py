@@ -286,7 +286,7 @@ class Fast_Recovery_Manager(object):
                     skips_protected = True
                     for path in paths_to_n:
                         path = '-'.join(path)
-                        print(f"P: failure {sw}-{neigh}, path from {sw} to {n}: {path}")
+                        #print(f"P: failure {sw}-{neigh}, path from {sw} to {n}: {path}")
                         if sw+"-"+neigh in path or neigh+"-"+sw in path:
                             skips_protected = False
                             break
@@ -299,7 +299,7 @@ class Fast_Recovery_Manager(object):
                     skips_protected = True
                     for path in paths_to_d:
                         path = '-'.join(path)
-                        print(f"Q: failure {sw}-{neigh}, path from {n} to {neigh}: {path}")
+                        #print(f"Q: failure {sw}-{neigh}, path from {n} to {neigh}: {path}")
                         if sw+"-"+neigh in path or neigh+"-"+sw in path:
                             skips_protected = False
                             break
@@ -369,7 +369,9 @@ class Fast_Recovery_Manager(object):
                             #no lfa
                             lfa = ""
                         routing_tbl[sw][host] = {"nexthops":this_nexthops, "lfa":lfa}
-                scenario = {"failures": [Fast_Recovery_Manager.edge_to_string(x) for x in failures], "routing_tbl": routing_tbl}
+                scenario = {"failures": [Fast_Recovery_Manager.edge_to_string(x) for x in failures],\
+                            "routing_tbl": routing_tbl,\
+                            "Rlfas": Rlfas}
                 scenarios.append(scenario)
             map["map"] = scenarios
             json.dump(map, f)
