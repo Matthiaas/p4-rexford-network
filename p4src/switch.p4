@@ -80,8 +80,14 @@ control MyIngress(inout headers hdr,
     action set_sent_tstp_for_port(bit<9> port){
         sent_tstp.write((bit<32>)port, std_meta.ingress_global_timestamp);
     }
-    action update_linkState(bit<9> port){
+    action fail_linkState(bit<9> port){
         linkState.write((bit<32>)port, (bit<1>)1);
+    }
+    action check_linkState(bit<9> port){
+        linkState.read(meta.linkState, (bit<32>)port);
+    }
+    action recover_linkState(bit<9> port){
+        linkState.write((bit<32>)port, (bit<1>)0);
     }
 
     // Flowlet related actions:
@@ -288,19 +294,19 @@ control MyIngress(inout headers hdr,
         if (hdr.heartbeat.isValid()){
             if (hdr.heartbeat.from_cp == 1){
                 // From cont -> check last rec timestamp
-                
                 get_rec_tstp_for_port(hdr.heartbeat.port);
                 if (meta.timestamp != 0 && (std_meta.ingress_global_timestamp - meta.timestamp > THRESHOLD_REC)){
                     //Update linkstate -> notify cont
-                    update_linkState(hdr.heartbeat.port);
-                    hdr.heartbeat.failed_link = 1;
-                    clone(CloneType.I2E, 100);
+                    fail_linkState(hdr.heartbeat.port);
+                    meta.hb_port = hdr.heartbeat.port;
+                    meta.hb_failed_link = 1;
+                    meta.hb_recovered_link = 0;
+                    clone3(CloneType.I2E, 100, meta);
                 }
                 //check last time we sent something to this port
                 get_sent_tstp_for_port(hdr.heartbeat.port); 
                 if (std_meta.ingress_global_timestamp - meta.timestamp > THRESHOLD_SENT){
                     //Send heartbeat to port
-                    hdr.heartbeat.from_cp = 0;
                     set_sent_tstp_for_port(hdr.heartbeat.port);
                     std_meta.egress_spec = hdr.heartbeat.port;
                 } else {
@@ -310,6 +316,14 @@ control MyIngress(inout headers hdr,
             } else {
                 // From neigh -> update last seen timestamp
                 set_rec_tstp_for_port(std_meta.ingress_port);
+                check_linkState(std_meta.ingress_port);
+                if (meta.linkState == 1){
+                    recover_linkState(std_meta.ingress_port);
+                    meta.hb_port = std_meta.ingress_port;
+                    meta.hb_failed_link = 0;
+                    meta.hb_recovered_link = 1;
+                    clone3(CloneType.I2E, 100, meta);
+                }
                 drop();
             }
         } else {
@@ -486,9 +500,14 @@ control MyEgress(inout headers hdr,
 
     apply {
         host_port_to_mac.apply();
-        if (hdr.heartbeat.isValid() && std_meta.instance_type == 1){
-            // set failed link flag for the clone we send to the cp
-            hdr.heartbeat.failed_link = 1;
+        if (hdr.heartbeat.isValid()){
+            if (std_meta.instance_type != 1){
+                //not cloned
+                hdr.heartbeat.from_cp = 0;
+            }
+            hdr.heartbeat.failed_link = meta.hb_failed_link;
+            hdr.heartbeat.recovered_link = meta.hb_recovered_link;
+            hdr.heartbeat.port = meta.hb_port;
         } else {
             port_bytes_out.count((bit<32>) std_meta.egress_port);
 
