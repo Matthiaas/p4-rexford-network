@@ -241,39 +241,45 @@ control MyIngress(inout headers hdr,
         hdr.rexford_ipv4.etherType = ETHER_TYPE_INTERNAL;
     }
 
-    action get_drop_probability_based_on_queue_length_and_traffic_class(out bit<32> dropProbability) {
+    action drop_based_on_queue_length_and_traffic_class() {
         bit<32> queueLen;
         estimated_queue_len.read(queueLen, (bit<32>) std_meta.egress_spec);
         
         // This line for whatever reason lets the compiler give up.
-        // dropProbability = 0;
+       bit<32> dropProbability = 0;
 
+        // The values in here are pretty arbitrary. But tweeked by testing different numbers.
         if(!hdr.tcp.isValid() && !hdr.udp.isValid()) {
+            // Priority 0.
             // Internal traffic like heartbeats.
             // Never drop them.
             dropProbability = 0;
         } else if( meta.srcPort <= 100 && meta.dstPort <= 100) {
-            if (queueLen > 30 && hdr.tcp.isValid()) {
-                dropProbability = queueLen + queueLen + queueLen - 90;
-                dropProbability = dropProbability + dropProbability + dropProbability;
-            } else {
-                dropProbability = 0;
-            }
-        } else if( meta.srcPort <= 200 && meta.dstPort <= 200) {
-            if (queueLen > 20) {
+            // Priority 1.
+            if (queueLen > 20 && hdr.tcp.isValid()) {
                 dropProbability = queueLen + queueLen + queueLen - 60;
                 dropProbability = dropProbability + dropProbability + dropProbability;
             } else {
                 dropProbability = 0;
             }
-        } else if( meta.srcPort <= 300 && meta.dstPort <= 300) {
-            if (queueLen > 1) {
-                dropProbability = queueLen + queueLen + queueLen + queueLen;
+        } else if( meta.srcPort <= 200 && meta.dstPort <= 200) {
+            // Priority 2.
+            if (queueLen > 10) {
+                dropProbability = queueLen + queueLen + queueLen - 30;
                 dropProbability = dropProbability + dropProbability + dropProbability;
             } else {
                 dropProbability = 0;
             }
+        } else if( meta.srcPort <= 300 && meta.dstPort <= 300) {
+            // Priority 4.
+            if (queueLen > 0) {
+                dropProbability = queueLen + queueLen + queueLen + queueLen;
+                dropProbability = dropProbability + dropProbability + dropProbability + 30;
+            } else {
+                dropProbability = 0;
+            }
         } else if( meta.srcPort <= 400 && meta.dstPort <= 400) {
+            // Priority 3.
             if (queueLen > 7) {
                 dropProbability = queueLen + queueLen + queueLen + queueLen - 21;
                 dropProbability = dropProbability + dropProbability + dropProbability;
@@ -282,12 +288,20 @@ control MyIngress(inout headers hdr,
             }
         } else if( meta.srcPort <= 65000 && meta.dstPort <= 65000 &&
                     60001 <= meta.srcPort && 60001 <= meta.dstPort) {
-            // TODO: Set this correctly.
+            // Priority 5.
             dropProbability = 0;
+            if (queueLen > 0) {
+                dropProbability = queueLen + queueLen + queueLen + queueLen;
+                dropProbability = dropProbability + dropProbability + dropProbability + 30;
+            } else {
+                dropProbability = 0;
+            }
         } else {
             // Traffic is not considered in any SLA.
             dropProbability = 1;
         }
+
+        random_drop(dropProbability);
     }
 
     apply {
@@ -422,9 +436,8 @@ control MyIngress(inout headers hdr,
                 meta.drop_packet = true;
             }
 
-            bit<32> dropProbability;
-            get_drop_probability_based_on_queue_length_and_traffic_class(dropProbability);
-            random_drop(dropProbability);
+            drop_based_on_queue_length_and_traffic_class();
+            
          
             // Only drop if packet is not going to the host.
             if (meta.drop_packet && std_meta.egress_spec != host_port) {
