@@ -16,7 +16,7 @@ def estimate_queu_len_thread(name, cont, time_interval):
     est_queue_len = np.zeros(max_ports)
     # This is a rough estimate on the max queulength 
     # asuming there are not a lot of heartbeats or similar in there.
-    max_queu_len = 1500 * 1000
+    max_queu_len = 1500 * 100
     while True:
         for i in range(max_ports):
             curr_time = current_sec_time()
@@ -28,8 +28,8 @@ def estimate_queu_len_thread(name, cont, time_interval):
             lost = 1250000 * time_passed 
             est_queue_len[i] = min(max(0,est_queue_len[i] + added - lost), max_queu_len)
             cont.register_write("estimated_queue_len", i, int(est_queue_len[i] / 1500 ))
-            if added > 0:
-                print(name, i, added, lost, est_queue_len[i])
+            #if added > 0:
+            #print("estimated_queue_len", name, i, added, lost, est_queue_len[i])
         time.sleep(time_interval)
 
 class QueueLengthEstimator(object):

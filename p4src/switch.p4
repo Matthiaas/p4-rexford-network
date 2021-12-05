@@ -12,6 +12,7 @@
 #define THRESHOLD_SENT 48w200000 // 0.2s -> if we haven't seen traffic for more than > send
 #define REGISTER_SIZE 8192
 #define FLOWLET_TIMEOUT 48w200000 // 0.2s
+#define DROP_FLOWLET_TIMEOUT 48w100000 // 0.1s
 
 /*************************************************************************
 ************   C H E C K S U M    V E R I F I C A T I O N   *************
@@ -33,11 +34,14 @@ control MyIngress(inout headers hdr,
     register<bit<9>>(1) host_port_reg;
 
     meter((bit<32>) MAX_PORTS, MeterType.bytes) port_congestion_meter;
-    register<bit<2>>(MAX_PORTS) port_congestions;
-    register<bit<64>>(1) dropped;
 
     register<flowlet_id_t>(REGISTER_SIZE) flowlet_to_id;
     register<timestamp_t>(REGISTER_SIZE) flowlet_time_stamp;
+
+    // This is used to only drop one packet every DROP_FLOWLET_TIMEOUT when the
+    // meter turns yellow.
+    register<bit<1>>(REGISTER_SIZE) flowlet_dropped;
+    register<timestamp_t>(REGISTER_SIZE) flowlet_lastdrop_time_stamp;
 
 
     // This is filled by the controller and uses the port_bytes_out information for it.
@@ -46,7 +50,6 @@ control MyIngress(inout headers hdr,
     // port -> last seen timestamp for rec/sent packet
     register<bit<48>>(MAX_PORTS) rec_tstp;
     register<bit<48>>(MAX_PORTS) sent_tstp;
-    register<bit<9>>(MAX_PORTS) debug;
 
     // port(link) -> 0(OK) | 1(FAIL)
     register<bit<1>>(MAX_PORTS) linkState;
@@ -61,21 +64,10 @@ control MyIngress(inout headers hdr,
 
     action drop() {
         meta.drop_packet = true;
-        bit<64> dr;
-        dropped.read(dr, 0);
-        dropped.write(0, dr + 1);
-
     }
 
-    action set_waypoint(rexfordAddr_t waypoint) {
-        hdr.ethernet.setValid();
-        hdr.ipv4.setValid();
-        hdr.waypoint.setValid();
-        hdr.rexford_ipv4.setInvalid();
-        hdr.waypoint.waypoint = waypoint;
-    }
+    // Heartbeat related actions:
 
-    //Heartbeat related actions
     action get_rec_tstp_for_port(bit<9> port){
         rec_tstp.read(meta.timestamp,(bit<32>)port);
     }
@@ -92,17 +84,7 @@ control MyIngress(inout headers hdr,
         linkState.write((bit<32>)port, (bit<1>)1);
     }
 
-    action set_nhop(egressSpec_t port) {
-        std_meta.egress_spec = port;
-        // This means there is no lfa.
-        meta.lfa = 0;
-    }
-
-    action set_nhop_and_lfa(egressSpec_t port, egressSpec_t lfa) {
-        std_meta.egress_spec = port;
-        meta.lfa = lfa;
-    }
-
+    // Flowlet related actions:
 
     action read_tcp_flowlet_registers(){
         //compute register index
@@ -119,6 +101,7 @@ control MyIngress(inout headers hdr,
 
         //Read previous time stamp
         flowlet_time_stamp.read(meta.flowlet_last_stamp, (bit<32>)meta.flowlet_register_index);
+        flowlet_lastdrop_time_stamp.read(meta.flowlet_lastdropped_stamp, (bit<32>)meta.flowlet_register_index);
 
         //Read previous flowlet id
         flowlet_to_id.read(meta.flowlet_id, (bit<32>)meta.flowlet_register_index);
@@ -139,7 +122,36 @@ control MyIngress(inout headers hdr,
         meta.flowlet_id = (bit<16>)random_t;
         // Only make this permanent for TCP. The next UDP packet can go whereever.
         flowlet_to_id.write((bit<32>)meta.flowlet_register_index, (bit<16>)meta.flowlet_id);
+        
     }
+
+    // Actions for table ecmp_group_to_nhop:
+
+    action set_nhop(egressSpec_t port) {
+        std_meta.egress_spec = port;
+        // This means there is no lfa.
+        meta.lfa = 0;
+    }
+
+    action set_nhop_and_lfa(egressSpec_t port, egressSpec_t lfa) {
+        std_meta.egress_spec = port;
+        meta.lfa = lfa;
+    }
+
+    table ecmp_group_to_nhop {
+        key = {
+            meta.ecmp_group_id:    exact;
+            meta.ecmp_hash: exact;
+        }
+        actions = {
+            drop;
+            set_nhop;
+            set_nhop_and_lfa;
+        }
+        size = 1024;
+    }
+
+    // Actions for table ipv4_forward:
 
     action ecmp_group(bit<14> ecmp_group_id, bit<16> num_nhops){
         hash(meta.ecmp_hash,
@@ -157,19 +169,6 @@ control MyIngress(inout headers hdr,
 	    meta.ecmp_group_id = ecmp_group_id;
     }
 
-    table ecmp_group_to_nhop {
-        key = {
-            meta.ecmp_group_id:    exact;
-            meta.ecmp_hash: exact;
-        }
-        actions = {
-            drop;
-            set_nhop;
-            set_nhop_and_lfa;
-        }
-        size = 1024;
-    }
-
     table ipv4_forward {
         key = { meta.next_destination : exact; }
         actions =  {
@@ -179,6 +178,16 @@ control MyIngress(inout headers hdr,
             drop;
         }
         default_action = drop();
+    }
+
+    // Actions for table udp_waypoint:
+
+    action set_waypoint(rexfordAddr_t waypoint) {
+        hdr.ethernet.setValid();
+        hdr.ipv4.setValid();
+        hdr.waypoint.setValid();
+        hdr.rexford_ipv4.setInvalid();
+        hdr.waypoint.waypoint = waypoint;
     }
 
     table udp_waypoint{
@@ -193,7 +202,24 @@ control MyIngress(inout headers hdr,
         default_action = NoAction();
     }
 
+    // Actions for the main Ingresspipeline:
+
+    action set_meta_ports() {
+        if (hdr.tcp.isValid()) {
+            meta.srcPort = hdr.tcp.srcPort;
+            meta.dstPort = hdr.tcp.dstPort;
+        } else if (hdr.udp.isValid()) {
+            meta.srcPort = hdr.udp.srcPort;
+            meta.dstPort = hdr.udp.dstPort;
+        } 
+    }
+
     action construct_rexford_headers() {
+        // First invalidate all unused headers.
+        hdr.ethernet.setInvalid();
+        hdr.ipv4.setInvalid();
+        hdr.waypoint.setInvalid();
+
         hdr.rexford_ipv4.setValid(); 
         hdr.rexford_ipv4.version    = hdr.ipv4.version;
         hdr.rexford_ipv4.ihl        = hdr.ipv4.ihl;
@@ -209,35 +235,52 @@ control MyIngress(inout headers hdr,
         hdr.rexford_ipv4.etherType = ETHER_TYPE_INTERNAL;
     }
 
-    action set_traffic_class() {
-        // Get Traffic Class.
-        if (hdr.tcp.isValid()) {
-            meta.srcPort = hdr.tcp.srcPort;
-            meta.dstPort = hdr.tcp.dstPort;
-        } else if (hdr.udp.isValid()) {
-            meta.srcPort = hdr.udp.srcPort;
-            meta.dstPort = hdr.udp.dstPort;
-        } 
+    action get_drop_probability_based_on_queue_length_and_traffic_class(out bit<32> dropProbability) {
+        bit<32> queueLen;
+        estimated_queue_len.read(queueLen, (bit<32>) std_meta.egress_spec);
+        
+        // This line for whatever reason lets the compiler give up.
+        // dropProbability = 0;
 
         if(!hdr.tcp.isValid() && !hdr.udp.isValid()) {
             // Internal traffic like heartbeats.
-            meta.traffic_class = 0;
+            // Never drop them.
+            dropProbability = 0;
         } else if( meta.srcPort <= 100 && meta.dstPort <= 100) {
-            meta.traffic_class = 1;
+            if (queueLen > 30 && hdr.tcp.isValid()) {
+                dropProbability = queueLen + queueLen + queueLen - 90;
+                dropProbability = dropProbability + dropProbability + dropProbability;
+            } else {
+                dropProbability = 0;
+            }
         } else if( meta.srcPort <= 200 && meta.dstPort <= 200) {
-            meta.traffic_class = 2;
+            if (queueLen > 20) {
+                dropProbability = queueLen + queueLen + queueLen - 60;
+                dropProbability = dropProbability + dropProbability + dropProbability;
+            } else {
+                dropProbability = 0;
+            }
         } else if( meta.srcPort <= 300 && meta.dstPort <= 300) {
-            meta.traffic_class = 3;
+            if (queueLen > 1) {
+                dropProbability = queueLen + queueLen + queueLen + queueLen;
+                dropProbability = dropProbability + dropProbability + dropProbability;
+            } else {
+                dropProbability = 0;
+            }
         } else if( meta.srcPort <= 400 && meta.dstPort <= 400) {
-            meta.traffic_class = 4;
+            if (queueLen > 7) {
+                dropProbability = queueLen + queueLen + queueLen + queueLen - 21;
+                dropProbability = dropProbability + dropProbability + dropProbability;
+            } else {
+                dropProbability = 0;
+            }
         } else if( meta.srcPort <= 65000 && meta.dstPort <= 65000 &&
                     60001 <= meta.srcPort && 60001 <= meta.dstPort) {
-            // This is the additional Traffic
-            meta.traffic_class = 5;
+            // TODO: Set this correctly.
+            dropProbability = 0;
         } else {
             // Traffic is not considered in any SLA.
-            // --> Drop it.
-            // TODO: This is not possible by calling an action.
+            dropProbability = 1;
         }
     }
 
@@ -270,17 +313,19 @@ control MyIngress(inout headers hdr,
                 drop();
             }
         } else {
-        //Normal traffic
-
+            //Normal traffic
             set_rec_tstp_for_port(std_meta.ingress_port);
-            set_traffic_class();
+    
             meta.drop_packet = false;
 
-            // Read the address of the host.
+            // Read the address and port of the host.
             rexfordAddr_t host_addr;
-            host_address_reg.read(host_addr, 0);
             bit<9> host_port;
+
+            host_address_reg.read(host_addr, 0);
             host_port_reg.read(host_port, 0);
+
+            set_meta_ports();
 
             if(hdr.ethernet.isValid() && hdr.udp.isValid()) {
                 meta.next_destination = (bit<4>) hdr.ipv4.dst_rexford_addr;   
@@ -299,13 +344,9 @@ control MyIngress(inout headers hdr,
             }
 
             if ((!hdr.waypoint.isValid() && hdr.ethernet.isValid()) || reached_waypoint) {
-                // Packet comes from host or reached the waypoint, remove the ethernet hdr.
+                // Packet comes from host or just reached the waypoint here.
                 // Only consider packets that come from a host that are not waypointed.
-
-                // First invalidate all unused headers.
-                hdr.ethernet.setInvalid();
-                hdr.ipv4.setInvalid();
-                hdr.waypoint.setInvalid();
+                // This is because waypointed traffic is not allowed to change the headers to be recognised by the tests.
                 construct_rexford_headers();
             }
 
@@ -323,10 +364,15 @@ control MyIngress(inout headers hdr,
                     read_tcp_flowlet_registers();
 
                     bit<48> flowlet_time_diff = std_meta.ingress_global_timestamp - meta.flowlet_last_stamp;
-
-                    //check if inter-packet gap is > 100ms
+                    //check if inter-packet gap is > FLOWLET_TIMEOUT
                     if (flowlet_time_diff > FLOWLET_TIMEOUT){
                         update_tcp_flowlet_id();
+                    }
+
+                    bit<48> flowlet_droptime_diff = std_meta.ingress_global_timestamp - meta.flowlet_last_stamp;
+                    // If the drop is longer than DROP_FLOWLET_TIMEOUT ago, possibly allow a new drop on this flow.
+                    if (meta.flowlet_lastdropped_stamp > DROP_FLOWLET_TIMEOUT) {
+                        flowlet_dropped.write((bit<32>)meta.flowlet_register_index, 0);
                     }
                 } else {
                     update_udp_flowlet_id();
@@ -338,26 +384,39 @@ control MyIngress(inout headers hdr,
                     ecmp_group_to_nhop.apply();
                 }
             }
-
-
-            port_congestion_meter.execute_meter((bit<32>) std_meta.egress_spec, meta.congestion_tag);
-            // TODO: This register is only for debug purpose. Delte sometime.
-            port_congestions.write((bit<32>) std_meta.egress_spec, meta.congestion_tag);
-            if(meta.congestion_tag == V1MODEL_METER_COLOR_YELLOW) {
+            
+            // This applies the meter. 
+            // - Yellow: Defines a threshold where we drop a single packet in order to make sure the TCP flow does not 
+            //           further increase its rate in the future. This is based on:
+            //            https://www.researchgate.net/publication/301857331_Global_Synchronization_Protection_for_Bandwidth_Sharing_TCP_Flows_in_High-Speed_Links
+            // - Red: We exceed the max bandwith with the max queulength 
+            //      --> We are forced to drop every packet to not increase the delay by to much. 
+            // (This can not be put into its own action since its conditionally calls actions.)
+            bit<2> congestion_tag;
+            port_congestion_meter.execute_meter((bit<32>) std_meta.egress_spec, congestion_tag);
+            if(congestion_tag == V1MODEL_METER_COLOR_YELLOW) {
                 if(hdr.tcp.isValid()) {
-                    random_drop(80);
-                } else  {
-                    random_drop(20);
+                    bit<1> dopped_flowlet;
+                    flowlet_dropped.read(dopped_flowlet, (bit<32>)meta.flowlet_register_index);
+                    if(dopped_flowlet == 0) {
+                        meta.drop_packet = true;
+                        flowlet_dropped.write((bit<32>)meta.flowlet_register_index, 1);
+                        flowlet_lastdrop_time_stamp.write((bit<32>)meta.flowlet_register_index, std_meta.ingress_global_timestamp);
+                    }
                 }
-
-            } else if(meta.congestion_tag == V1MODEL_METER_COLOR_RED) {
-               drop();
+            } else if(congestion_tag == V1MODEL_METER_COLOR_RED) {
+                meta.drop_packet = true;
             }
+
+            bit<32> dropProbability;
+            get_drop_probability_based_on_queue_length_and_traffic_class(dropProbability);
+            random_drop(dropProbability);
+         
             // Only drop if packet is not going to the host.
             if (meta.drop_packet && std_meta.egress_spec != host_port) {
                 mark_to_drop(std_meta);
-            }
-            if (!meta.drop_packet){
+            } else {
+                // If we dont drop it, mark it as a heartbeat.
                 set_sent_tstp_for_port(std_meta.egress_spec);
             }
         }
