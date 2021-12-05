@@ -269,6 +269,56 @@ class Fast_Recovery_Manager(object):
         return lfas
 
     @staticmethod
+    def compute_Rlfas(graph: Graph, switches, failures=None):
+        """PQ algorithm"""
+        Rlfas = {}
+        all_nodes = set(switches)
+        for sw in switches:
+            neighs = list(graph.get_p4switches_connected_to(sw))
+            # per-link calculation -> failed link is sw-neigh
+            Rlfas[sw] = {}
+            for neigh in neighs:
+                nodes = all_nodes - set([sw, neigh])
+                P = set()
+                #compute the P set, i.e all nodes reachable without going through sw-neigh
+                for n in nodes:
+                    paths_to_n = all_shortest_paths(graph, sw, n, weight='delay_w')
+                    skips_protected = True
+                    for path in paths_to_n:
+                        path = '-'.join(path)
+                        print(f"P: failure {sw}-{neigh}, path from {sw} to {n}: {path}")
+                        if sw+"-"+neigh in path or neigh+"-"+sw in path:
+                            skips_protected = False
+                            break
+                    if skips_protected:
+                        P.add(n)
+                Q = set()
+                # Q set, i.e all nodes from which neigh is reacheable without going through sw-neigh
+                for n in nodes:
+                    paths_to_d = all_shortest_paths(graph, n, neigh, weight='delay_w')
+                    skips_protected = True
+                    for path in paths_to_d:
+                        path = '-'.join(path)
+                        print(f"Q: failure {sw}-{neigh}, path from {n} to {neigh}: {path}")
+                        if sw+"-"+neigh in path or neigh+"-"+sw in path:
+                            skips_protected = False
+                            break
+                    if skips_protected:
+                        Q.add(n)
+                PQ = list(P.intersection(Q))
+                #take the alternative with shortest metric
+                if len(PQ) > 1:
+                    distances = [shortest_path_length(graph, sw, n, weight='delay_w') for n in PQ]
+                    sorted_alt = [x for _,x in sorted(zip(distances, PQ))]
+                    Rlfas[sw][neigh] = sorted_alt[0]
+                elif len(PQ) == 1:
+                    Rlfas[sw][neigh] = PQ[0]
+                else:
+                    Rlfas[sw][neigh] = ""
+        print("Rlfas:\n",Rlfas)
+        return Rlfas
+
+    @staticmethod
     def load_failures(all_fails: str) -> List[List[Tuple[str, str]]]:
         all_failures = []
         with open(all_fails, 'r') as f:
@@ -278,7 +328,7 @@ class Fast_Recovery_Manager(object):
         return all_failures
 
     @staticmethod
-    def precompute_routing(graph: Graph, switches: List[str], hosts, all_failures: List[List[Tuple[str, str]]] = None):
+    def precompute_routing(graph_original: Graph, switches: List[str], hosts, all_failures: List[List[Tuple[str, str]]] = None):
         """
             Given a set of failures, computes the routing table for all switches for a single scenario
         """
@@ -289,9 +339,13 @@ class Fast_Recovery_Manager(object):
             if not all_failures:
                 all_failures = [None]
             for failures in all_failures:
+                graph = graph_original.copy()
+                for failure in failures:
+                    graph.remove_edge(*failure)
                 distances, shortest_paths = Fast_Recovery_Manager.dijkstra(graph, failures)
                 nexthops = Fast_Recovery_Manager.compute_nexthops(shortest_paths, switches, hosts, failures)
                 lfas = Fast_Recovery_Manager.compute_lfas(graph, switches, hosts, distances, nexthops, failures)
+                Rlfas = Fast_Recovery_Manager.compute_Rlfas(graph, switches, failures)
                 routing_tbl = {}
                 #for sw in switches:
                 #    routing_tbl[sw] = {}
@@ -314,7 +368,6 @@ class Fast_Recovery_Manager(object):
                         except:
                             #no lfa
                             lfa = ""
-                        
                         routing_tbl[sw][host] = {"nexthops":this_nexthops, "lfa":lfa}
                 scenario = {"failures": [Fast_Recovery_Manager.edge_to_string(x) for x in failures], "routing_tbl": routing_tbl}
                 scenarios.append(scenario)

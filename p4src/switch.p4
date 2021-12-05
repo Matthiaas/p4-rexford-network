@@ -258,7 +258,7 @@ control MyIngress(inout headers hdr,
                     meta.hb_port = hdr.heartbeat.port;
                     meta.hb_failed_link = 1;
                     meta.hb_recovered_link = 0;
-                    clone3(CloneType.I2E, 100, meta);
+                    clone3(CloneType.I2E, 100, meta); //this yields a compilation error due to a bug in their src code
                 }
                 //check last time we sent something to this port
                 get_sent_tstp_for_port(hdr.heartbeat.port); 
