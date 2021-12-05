@@ -46,8 +46,6 @@ struct metadata {
     bit<1> hb_failed_link; 
     bit<1> hb_recovered_link;
 
-    bit<2> congestion_tag;
-
     port_t srcPort;
     port_t dstPort;
     bit<3> traffic_class;
@@ -57,12 +55,18 @@ struct metadata {
     bit<14> ecmp_group_id;
 
     bit<48> flowlet_last_stamp;
+    bit<48> flowlet_lastdropped_stamp;
     
     bit<13> flowlet_register_index;
     bit<16> flowlet_id;
 
+    // If there is no LFA this is 0.
     egressSpec_t lfa;
 
+    // Dropping a packet is done by setting this flag.
+    // The end of the Ingress pipeline will check for that flag and then drop the traffic if set.
+    // This is required s.t. we wabt to be able drop a packet inside an if inside an action
+    // Which is not allowed on our platform.
     bool drop_packet;
 }
 
