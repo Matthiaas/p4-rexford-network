@@ -10,7 +10,19 @@ max_ports = 10
 def current_sec_time():
     return time.time() 
 
-def estimate_queu_len_thread(name, cont, time_interval):
+
+def estimate_queu_len_thread(cont, time_interval):
+    """
+        This gives an estimate of the current queue length for each port for a given controller.
+        The result is then written into the estimated_queue_len register which then can be accessed
+        by the p4 code.
+        The calculation is based on a counter that is increased in the egresspipeline for every
+        packet.
+        
+        Args:
+            cont: controller
+            time_interval: float in seconds on how often to re-estimate the queue length.
+    """
     last_counts = np.zeros(max_ports)
     last_timestamp = np.full(max_ports, current_sec_time())
     est_queue_len = np.zeros(max_ports)
@@ -28,16 +40,16 @@ def estimate_queu_len_thread(name, cont, time_interval):
             lost = 1250000 * time_passed 
             est_queue_len[i] = min(max(0,est_queue_len[i] + added - lost), max_queu_len)
             cont.register_write("estimated_queue_len", i, int(est_queue_len[i] / 1500 ))
-            #if added > 0:
-            #print("estimated_queue_len", name, i, added, lost, est_queue_len[i])
         time.sleep(time_interval)
 
 class QueueLengthEstimator(object):
-    """Heart beat Generator."""
+    """Queu Lengt Estimator."""
+    """
+        Estimates the out quelength for every port on every switch.
+    """
 
     def __init__(self, time_interval, controllers):
         """Initializes the topology and data structures."""
-
         self.time_interval = time_interval
         self.controllers = controllers
         self.traffic_threads = []
@@ -46,8 +58,8 @@ class QueueLengthEstimator(object):
     def run(self):
         """Main runner"""
         # for each switch
-        for name, cont in self.controllers.items():
-            t = threading.Thread(target=estimate_queu_len_thread, args=(name, cont, self.time_interval), daemon=True)
+        for _, cont in self.controllers.items():
+            t = threading.Thread(target=estimate_queu_len_thread, args=(cont, self.time_interval), daemon=True)
             t.start()
             # save all threads (currently not used)
             self.traffic_threads.append(t)
