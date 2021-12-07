@@ -7,6 +7,10 @@ from heartbeat import HeartBeatGenerator as HBG
 from queulengthestimator import QueueLengthEstimator as QLE
 import json
 from scapy.all import *
+import pathlib
+import sys
+import os
+
 
 import way_point_reader as wpr
 
@@ -22,9 +26,12 @@ class Controller(object):
         self.topo = load_topo('topology.json')
         self.controllers = {}
         self.failed_links = set() #current set of failed links
-        self.recovery_manager = FRM(self.topo, "controllers/configs/link_failure_map_generated.json")
+        path = os.getcwd() + "/" + sys.argv[0]
+        self.base_path  = "/".join(path.split("/")[:-1])
+        self.recovery_manager = FRM(
+            self.topo, self.base_path + "/configs/link_failure_map_generated.json")
         # Settings:
-        self.settings = self.read_settings("controllers/configs/settings.json")
+        self.settings = self.read_settings(self.base_path + "/configs/settings.json")
         self.hb_manager = HBG(self.settings["heartbeat_freq"], self.topo)
         self.qle = QLE(self.settings["queue_len_estimator_sample_freq"], self.controllers)
         self.init()
@@ -277,7 +284,7 @@ class Controller(object):
         for p4switch in self.topo.get_p4switches():
             self.configure_host_port(p4switch)
             self.configure_host_address(p4switch)
-        self.setup_way_points("controllers/configs/full.slas")
+        self.setup_way_points(self.base_path + "/configs/full.slas")
         routing_tables, Rlfas = self.recovery_manager.query_routing_state()
         self.load_routing_table(routing_tables, Rlfas)
         self.setup_meters()

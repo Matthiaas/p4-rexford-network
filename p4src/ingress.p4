@@ -264,6 +264,10 @@ control MyIngress(inout headers hdr,
         hdr.rexford_ipv4.scmp_splits = 0;
     }
 
+    action times_ten(in bit<32> val, out bit<32> res) {
+        res = (val << 3) + (val << 1);
+    }
+
     action drop_based_on_queue_length_and_traffic_class() {
         bit<32> queueLen;
         estimated_queue_len.read(queueLen, (bit<32>) std_meta.egress_spec);
@@ -280,42 +284,38 @@ control MyIngress(inout headers hdr,
         } else if( meta.srcPort <= 100 && meta.dstPort <= 100) {
             // Priority 1.
             if (queueLen > 20 && hdr.tcp.isValid()) {
-                dropProbability = queueLen + queueLen + queueLen - 60;
-                dropProbability = dropProbability + dropProbability + dropProbability;
+                times_ten(queueLen - 20, dropProbability);
             } else {
                 dropProbability = 0;
             }
         } else if( meta.srcPort <= 200 && meta.dstPort <= 200) {
             // Priority 2.
             if (queueLen > 10) {
-                dropProbability = queueLen + queueLen + queueLen - 30;
-                dropProbability = dropProbability + dropProbability + dropProbability;
+                times_ten(queueLen - 10, dropProbability);
             } else {
                 dropProbability = 0;
             }
         } else if( meta.srcPort <= 300 && meta.dstPort <= 300) {
-            // Priority 4.
+            // Priority 5.
             if (queueLen > 0) {
-                dropProbability = queueLen + queueLen + queueLen + queueLen;
-                dropProbability = dropProbability + dropProbability + dropProbability + 30;
+                // Give this some higher dropping prob since its low prio.
+                times_ten(queueLen + 20, dropProbability);
             } else {
                 dropProbability = 0;
             }
         } else if( meta.srcPort <= 400 && meta.dstPort <= 400) {
             // Priority 3.
             if (queueLen > 7) {
-                dropProbability = queueLen + queueLen + queueLen + queueLen - 21;
-                dropProbability = dropProbability + dropProbability + dropProbability;
+                times_ten(queueLen - 7, dropProbability);
             } else {
                 dropProbability = 0;
             }
         } else if( meta.srcPort <= 65000 && meta.dstPort <= 65000 &&
                     60001 <= meta.srcPort && 60001 <= meta.dstPort) {
-            // Priority 5.
+            // Priority 4.
             dropProbability = 0;
             if (queueLen > 0) {
-                dropProbability = queueLen + queueLen + queueLen + queueLen;
-                dropProbability = dropProbability + dropProbability + dropProbability + 30;
+                times_ten(queueLen, dropProbability);
             } else {
                 dropProbability = 0;
             }
