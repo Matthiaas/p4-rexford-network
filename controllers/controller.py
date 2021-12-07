@@ -174,7 +174,7 @@ class Controller(object):
                     port_hash = 0
                     for nextport in nexthopports:
                         # Why are we setting lfa if ecmp?
-                        add_set_next_hop("ecmp_group_to_nhop", 
+                        add_set_next_hop("escmp_group_to_nhop", 
                             match_keys=[str(ecmp_group_id), str(port_hash)], 
                             next_port=nextport, 
                             lfa_port=lfa_port)
