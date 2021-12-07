@@ -111,23 +111,6 @@ header rexford_ipv4_t {
     bit<16>   etherType;    // 112
 }
 
-// // Size = 20 B
-// header ipv4_t {
-//     bit<4>    version;
-//     bit<4>    ihl;
-//     bit<6>    dscp;
-//     bit<2>    ecn;
-//     bit<16>   totalLen;
-//     bit<3>    flags;
-//     bit<1>    padding;
-//     bit<8>    protocol;
-//     bit<16>   hdrChecksum;
-//     rexfordAddr_t srcAddr;
-//     rexfordAddr_t dstAddr;
-//     // Waypoint is equal to dstAddr if there is no waypoint.
-//     rexfordAddr_t wayPoint;
-// }
-
 // Size = 20 B
 header ipv4_t {
     bit<4>    version;
