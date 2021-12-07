@@ -66,17 +66,25 @@ class Fast_Recovery_Manager(object):
         with open(failures_opath, "w") as f:
             json.dump({"failures": possible_failures}, f)
 
-    def load_link_fail_map(self, links_fail_file: str) -> List[Dict[str, object]]:
+    @staticmethod
+    def __load_link_fail_map(config_file: str):
         """
-            To be called at runtime after precomputation
+            To be called by controller at runtime after precomputation
             Args:
-                links_fail_file:path to link_fail.json
+                links_fail_file: path to the config containing all the routing tables for the precomputed failures
             Returns:
-                Array of JSON. "failures" is converted to a set for ease of lookup
+                dict{set(failures): dict{switch: dict{host: dict{"nexthops": [str], "lfa": str}}}}
+                dict{set(failures): dict{switch: dict{host: Rlfa}}
         """
-        with open(links_fail_file, 'r') as f:
-            data = json.load(f)
-            return [{"failures": set(self.parse_failures(x["failures"])), "routing_tbl": x["routing_tbl"]} for x in data["map"]]
+        failure_rts = {}
+        failure_rlfas = {}
+        with open(config_file, 'r') as f:
+            for entry in json.load(f)["map"]:
+                failures = frozenset(entry["failures"])
+                failure_rts[failures] = entry["routing_tbl"]
+                failure_rlfas[failures] = entry["Rlfas"]
+        return failure_rts, failure_rlfas
+
 
     def __init__(self, topo: Graph, links_fail_file: str):
 
@@ -84,65 +92,13 @@ class Fast_Recovery_Manager(object):
             print("[!] link_fail_map not found")
             raise FileNotFound()
 
-        self.fail_map: List[Dict[str, object]] = self.load_link_fail_map(links_fail_file)
-        # example of access to the structure
-        # print(fail_map[0]["failures"])
-        # print(fail_map[0]["routing_tbl"]["switch1"]["host1"])
+        self.failure_rts = {}
+        self.failure_rlfas = {}
+        self.failure_rts, self.failures_rlfas = Fast_Recovery_Manager.__load_link_fail_map(links_fail_file)
         self.topo: Graph = topo  # passed by controller
         self.switches: List[str] = self.topo.get_p4switches().keys()
         self.hosts: List[str] = self.topo.get_hosts()
-        self.failures: Set[Tuple[str, str]] = set()
 
-    def query_map(self, failures: List[Tuple[str, str]]):
-        """
-            Helper: Query the failure map at runtime given the current failures to recover the state that should be applied
-            
-            Args:
-                failures: list(tuple(str,str))
-            Returns:
-                routing_tbl: dict{str: dict{str: str}} -> dict{switch: {host: nh}}
-        """
-        failures = set(failures)
-        for scenario in self.fail_map:
-            if scenario["failures"] == failures:
-                return scenario["routing_tbl"]
-        raise ScenarioNotFound()
-
-    def load_nexthops_and_lfas(self, failures: List[Tuple[str, str]] = None) -> Dict[str, List[Tuple[str, int, str]]]:
-        """
-        Load nexthops and lfas from state
-        Args:
-            failures (list(tuple(str, str))): List of failed links.
-        Returns:
-            dict{str, dict{str: [(str, int, str)]}} -> dict{switch:dict{host: [(primary_nh, port, mac),(secondary_nh,port,mac)]}}
-        """
-        
-        nexthops = {}
-        routing_tbl = self.query_map(failures)
-        for sw in self.switches:
-            d = {}
-            for host in self.hosts:
-                hops = routing_tbl[sw][host]  # nh, lfa
-                state = []
-                for hop in hops:
-                    if hop == "":
-                        # no nexthop (should not be possible...) or no lfa :(
-                        state.append(("", -1, ""))
-                    else:
-                        mac = self.topo.get_node_to_node_mac(hop, sw)
-                        port = self.topo.node_to_node_port_num(sw, hop)
-                        state.append((hop, port, mac))
-                d[host] = state
-            nexthops[sw] = d
-        return nexthops
-
-    def get_nexthop(nexthops, switch, host):
-        # Get the next hop for host from switch given nexthops=load_nexthops_and_lfas()
-        return nexthops[switch][host][0]
-
-    def get_lfa(nexthops, switch, host):
-        # Get the lfa for host from switch given nexthops=load_nexthops_and_lfas()
-        return nexthops[switch][host][1]
 
     ##############################
     #                            #                           
@@ -150,7 +106,7 @@ class Fast_Recovery_Manager(object):
     #                            #
     ##############################
     """
-    compute_nexthops and compute_lfas should be called before runtime, i.e used
+    compute_nexthops, compute_lfas and compute_Rlfas should be called before runtime, i.e used
     to build the links_fail_file.json structure
     """
 
@@ -234,7 +190,11 @@ class Fast_Recovery_Manager(object):
 
     @staticmethod
     def compute_lfas(graph: Graph, switches, hosts, distances, nexthops, failures=None):
-        """Compute LFA (loop-free alternates) for all nexthops."""
+        """
+        Compute per-destination LFA  for all nexthops.
+        
+        Returns lfas = dict{str: dict{str: str}} -> dict{Switch: dict{dest: LFA}}
+        """
         lfas = {}
         # for every switch...
         for sw, destinations in nexthops.items():
@@ -270,7 +230,14 @@ class Fast_Recovery_Manager(object):
 
     @staticmethod
     def compute_Rlfas(graph: Graph, switches, failures=None):
-        """PQ algorithm"""
+        """
+        Implements the PQ algorithm for Remote LFAs
+         
+        Returns Rlfa = dict{str : dict{str: str}} -> dict{Switch: {Neigh: RLFA}}
+            i.e it maps every switch to the RLFA for every link towards one of its neigh
+            that could fail
+        
+        """
         Rlfas = {}
         all_nodes = set(switches)
         for sw in switches:
@@ -320,62 +287,79 @@ class Fast_Recovery_Manager(object):
 
     @staticmethod
     def load_failures(all_fails: str) -> List[List[Tuple[str, str]]]:
+        """Loads all possible failures from config"""
         all_failures = []
         with open(all_fails, 'r') as f:
             data = json.load(f)
             for failures in data["failures"]:
                 all_failures.append(Fast_Recovery_Manager.parse_failures(failures))
         return all_failures
+    
+    @staticmethod
+    def __form_routing(graph, switches, hosts, failures=None):
+        """
+            Forms the routing state for the current failure scenario
+            Returns a scenario data structure
+        """
+        
+        #dijkstra handles removing the failed links here
+        distances, shortest_paths = Fast_Recovery_Manager.dijkstra(graph, failures)
+        nexthops = Fast_Recovery_Manager.compute_nexthops(shortest_paths, switches, hosts, failures)
+        lfas = Fast_Recovery_Manager.compute_lfas(graph, switches, hosts, distances, nexthops, failures)
+        Rlfas = Fast_Recovery_Manager.compute_Rlfas(graph, switches, failures)
+        
+        routing_tbl = {}
+        for sw in switches:
+            routing_tbl[sw] = {}
+            for host, this_nexthops in nexthops[sw]:
+                try:
+                    lfa = lfas[sw][host]
+                except:
+                    #no lfa
+                    lfa = ""
+                routing_tbl[sw][host] = {"nexthops":this_nexthops, "lfa":lfa}
+        scenario = {"failures": [Fast_Recovery_Manager.edge_to_string(x) for x in failures],\
+                            "routing_tbl": routing_tbl,\
+                            "Rlfas": Rlfas}
+        return scenario
 
     @staticmethod
     def precompute_routing(graph_original: Graph, switches: List[str], hosts, all_failures: List[List[Tuple[str, str]]] = None):
         """
-            Given a set of failures, computes the routing table for all switches for a single scenario
+            Given a (sub)set of all possible failures from config, computes the routing table for all switches
+            and dumps it into config
         """
-        
+        #dumps into this file
         with open("./configs/link_failure_map_generated.json", 'w') as f:
-            map = {"map": [], "_comment": []}
+            map = {"map": []}
             scenarios = []
             if not all_failures:
                 all_failures = [None]
             for failures in all_failures:
-                graph = graph_original.copy()
-                for failure in failures:
-                    graph.remove_edge(*failure)
-                distances, shortest_paths = Fast_Recovery_Manager.dijkstra(graph, failures)
-                nexthops = Fast_Recovery_Manager.compute_nexthops(shortest_paths, switches, hosts, failures)
-                lfas = Fast_Recovery_Manager.compute_lfas(graph, switches, hosts, distances, nexthops, failures)
-                Rlfas = Fast_Recovery_Manager.compute_Rlfas(graph, switches, failures)
-                routing_tbl = {}
-                #for sw in switches:
-                #    routing_tbl[sw] = {}
-                #    for host in hosts:
-                #        routing_tbl[sw][host] = []
-                #        for h, nhs in nexthops[sw]:
-                #            if h == host:
-                #                routing_tbl[sw][host].append(nh)
-                #                try:
-                #                    lfa = lfas[sw][host]
-                #                except:
-                #                    # no lfa
-                #                    lfa = ""
-                #                routing_tbl[sw][host].append(lfa)
-                for sw in switches:
-                    routing_tbl[sw] = {}
-                    for host, this_nexthops in nexthops[sw]:
-                        try:
-                            lfa = lfas[sw][host]
-                        except:
-                            #no lfa
-                            lfa = ""
-                        routing_tbl[sw][host] = {"nexthops":this_nexthops, "lfa":lfa}
-                scenario = {"failures": [Fast_Recovery_Manager.edge_to_string(x) for x in failures],\
-                            "routing_tbl": routing_tbl,\
-                            "Rlfas": Rlfas}
+                scenario = Fast_Recovery_Manager.__form_routing(graph_original, switches, hosts, failures)
                 scenarios.append(scenario)
             map["map"] = scenarios
             json.dump(map, f)
 
+    #############################
+    #                           #
+    #   CONTROLLER INTERFACE    #
+    #                           #
+    #############################
+
+    def query_routing_state(self, failures=[]):
+        """Called by controller to retrieve routing state given failures"""
+        try:
+            rt = self.failure_rts[frozenset(failures)]
+            rlfa = self.failures_rlfas[frozenset(failures)]
+            print(f"Recovery: loaded routing tables and rlfas from config for failures {failures}")
+            return rt, rlfa
+        except KeyError:
+            scenario = Fast_Recovery_Manager.__form_routing(self.topo, self.switches, self.hosts, failures)
+            print(f"Scenario not found in config. Recomputing...")
+            return scenario["routing_tbl"], scenario["Rlfas"]
+
+    
 def main(argv, argc):
     no_failures = False
     if argc > 1 and argv[1] == "nofailures":
