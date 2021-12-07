@@ -51,8 +51,9 @@ struct metadata {
     bit<3> traffic_class;
 
     // Flowlet
-    bit<14> ecmp_hash;
-    bit<14> ecmp_group_id;
+    bit<16> escmp_nhop_id;
+    bit<14> escmp_group_id;
+    bool    scmp_new_split;
 
     bit<48> flowlet_last_stamp;
     bit<48> flowlet_lastdropped_stamp;
@@ -94,21 +95,22 @@ header waypoint_t {
 
 // Size = 9 B
 header rexford_ipv4_t {
-    bit<4>    version;      // 4
-    bit<4>    ihl;          // 8
-    bit<6>    dscp;         // 14
-    bit<2>    ecn;          // 16
-    bit<16>   totalLen;     // 32
-    bit<3>    flags;        // 35
-    bit<1>    padding;      // 36
-    bit<8>    protocol;     // 44
-    bit<16>   hdrChecksum;  // 60
-    rexfordAddr_t srcAddr;  // 64
-    rexfordAddr_t dstAddr;  // 68
-    rexfordAddr_t original_dstAddr; //72
-    bit<1> rlfa_protected;  //73
-    bit<23>   padding2;     // 96
-    bit<16>   etherType;    // 112
+    bit<4>          version;            // 4
+    bit<4>          ihl;                // 8
+    bit<6>          dscp;               // 14
+    bit<2>          ecn;                // 16
+    bit<16>         totalLen;           // 32
+    bit<3>          flags;              // 35
+    bit<1>          padding;            // 36
+    bit<8>          protocol;           // 44
+    bit<16>         hdrChecksum;        // 60
+    rexfordAddr_t   srcAddr;            // 64
+    rexfordAddr_t   dstAddr;            // 68
+    rexfordAddr_t   original_dstAddr;   // 72
+    bit<1>          rlfa_protected;     // 73
+    bit<2>          scmp_splits;        // 75
+    bit<21>         padding2;           // 96
+    bit<16>         etherType;          // 112
 }
 
 // Size = 20 B

@@ -109,7 +109,7 @@ control MyIngress(inout headers hdr,
         
     }
 
-    // Actions for table ecmp_group_to_nhop:
+    // Actions for table escmp_group_to_nhop:
 
     action set_nhop(egressSpec_t port) {
         std_meta.egress_spec = port;
@@ -122,10 +122,10 @@ control MyIngress(inout headers hdr,
         meta.lfa = lfa;
     }
 
-    table ecmp_group_to_nhop {
+    table escmp_group_to_nhop {
         key = {
-            meta.ecmp_group_id:    exact;
-            meta.ecmp_hash: exact;
+            meta.escmp_group_id:    exact;
+            meta.escmp_nhop_id: exact;
         }
         actions = {
             drop;
@@ -137,8 +137,12 @@ control MyIngress(inout headers hdr,
 
     // Actions for table ipv4_forward:
 
-    action ecmp_group(bit<14> ecmp_group_id, bit<16> num_nhops){
-        hash(meta.ecmp_hash,
+    action escmp_group(bit<14> escmp_group_id, bit<16> num_ecmp_nhops, bit<16> num_scmp_nhops){
+        bit<16> num_nhops = num_scmp_nhops;
+        if (hdr.rexford_ipv4.scmp_splits == MAX_SCMP_SPLITS) {
+            num_nhops = num_ecmp_nhops;
+        }
+        hash(meta.escmp_nhop_id,
 	            HashAlgorithm.crc16,
 	            (bit<1>)0,
                 { 
@@ -150,7 +154,11 @@ control MyIngress(inout headers hdr,
                     meta.flowlet_id // For UDP this is actually the only neccessary one.
                 },
 	            num_nhops);
-	    meta.ecmp_group_id = ecmp_group_id;
+
+	    meta.escmp_group_id = escmp_group_id;
+        if (meta.escmp_nhop_id >= num_ecmp_nhops) {
+            hdr.rexford_ipv4.scmp_splits = hdr.rexford_ipv4.scmp_splits + 1;
+        }
     }
 
     table ipv4_forward {
@@ -158,7 +166,7 @@ control MyIngress(inout headers hdr,
         actions =  {
             set_nhop;
             set_nhop_and_lfa;
-            ecmp_group;
+            escmp_group;
             drop;
         }
         default_action = drop();
@@ -253,6 +261,7 @@ control MyIngress(inout headers hdr,
         hdr.rexford_ipv4.dstAddr = (bit<4>) hdr.ipv4.dst_rexford_addr;   
 
         hdr.rexford_ipv4.etherType = ETHER_TYPE_INTERNAL;
+        hdr.rexford_ipv4.scmp_splits = 0;
     }
 
     action drop_based_on_queue_length_and_traffic_class() {
@@ -428,7 +437,7 @@ control MyIngress(inout headers hdr,
                 meta.next_destination = hdr.waypoint.waypoint;
             }    
 
-            // Flowlet ECMP switching.
+            // Flowlet ECMP & SCMP switching.
             @atomic {
                 if (hdr.tcp.isValid()) {
                     read_tcp_flowlet_registers();
@@ -450,8 +459,8 @@ control MyIngress(inout headers hdr,
             }
 
             switch (ipv4_forward.apply().action_run){
-                ecmp_group: {
-                    ecmp_group_to_nhop.apply();
+                escmp_group: {
+                    escmp_group_to_nhop.apply();
                 }
             }
             //check nexthop status and in case route using the lfa or rlfa

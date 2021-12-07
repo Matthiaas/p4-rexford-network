@@ -137,8 +137,8 @@ class Controller(object):
                 else:
                     self.controllers[p4switch].table_add(
                             "ipv4_forward", 
-                            action_name="ecmp_group", 
-                            match_keys=[host_addr], action_params=[str(ecmp_group_id), str(len(nexthopports))])
+                            action_name="escmp_group", 
+                            match_keys=[host_addr], action_params=[str(ecmp_group_id), str(len(nexthopports)), str(len(nexthopports))])
                     port_hash = 0
                     for nextport in nexthopports:
                         # Why are we setting lfa if ecmp?
