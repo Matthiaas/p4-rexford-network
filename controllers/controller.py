@@ -8,6 +8,8 @@ from queulengthestimator import QueueLengthEstimator as QLE
 import json
 from scapy.all import *
 import pathlib
+import sys
+import os
 
 
 import way_point_reader as wpr
@@ -24,7 +26,8 @@ class Controller(object):
         self.topo = load_topo('topology.json')
         self.controllers = {}
         self.failed_links = set() #current set of failed links
-        self.base_path = str(pathlib.Path(__file__).parent.resolve())
+        path = os.getcwd() + "/" + sys.argv[0]
+        self.base_path  = "/".join(path.split("/")[:-1])
         self.recovery_manager = FRM(
             self.topo, self.base_path + "/configs/link_failure_map_generated.json")
         # Settings:
