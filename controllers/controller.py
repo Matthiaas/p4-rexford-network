@@ -16,7 +16,7 @@ import way_point_reader as wpr
 
 
 #define here table names
-TABLES = ["ipv4_forward", "ecmp_group_to_nhop", "final_forward"]
+TABLES = ["ipv4_forward", "escmp_group_to_nhop", "final_forward"]
 
 class Controller(object):
 
