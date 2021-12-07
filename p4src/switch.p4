@@ -15,6 +15,7 @@
 #define REGISTER_SIZE 8192
 #define FLOWLET_TIMEOUT 48w200000 // 0.2s
 #define DROP_FLOWLET_TIMEOUT 48w100000 // 0.1s
+#define MAX_SCMP_SPLITS 3
 
 #include "ingress.p4"
 #include "egress.p4"
