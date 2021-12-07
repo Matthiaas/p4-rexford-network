@@ -89,7 +89,7 @@ class Fast_Recovery_Manager(object):
     def __init__(self, topo: Graph, links_fail_file: str):
 
         if not os.path.exists(links_fail_file):
-            print("[!] link_fail_map not found")
+            print("[!] link_fail_map not found at:" + links_fail_file)
             raise FileNotFound()
 
         self.failure_rts = {}
