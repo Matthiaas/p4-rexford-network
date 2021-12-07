@@ -7,6 +7,8 @@ from heartbeat import HeartBeatGenerator as HBG
 from queulengthestimator import QueueLengthEstimator as QLE
 import json
 from scapy.all import *
+import pathlib
+
 
 import way_point_reader as wpr
 
@@ -21,10 +23,11 @@ class Controller(object):
         self.failure_rts = {}# failures -> routing_tbl
         self.failure_rlfas = {} # failures -> Rlfas
         self.failed_links = set() #current set of failed links
+        self.base_path = str(pathlib.Path(__file__).parent.resolve())
         # TODO: Uncomment when it works.
         # self.recovery_manager = FRM(self.topo, 'example_link_failure_map.json')
         # Settings:
-        self.settings = self.read_settings("controllers/configs/settings.json")
+        self.settings = self.read_settings(self.base_path + "/configs/settings.json")
         self.hb_manager = HBG(self.settings["heartbeat_freq"], self.topo)
         self.qle = QLE(self.settings["queue_len_estimator_sample_freq"], self.controllers)
         self.init()
@@ -264,8 +267,8 @@ class Controller(object):
         for p4switch in self.topo.get_p4switches():
             self.configure_host_port(p4switch)
             self.configure_host_address(p4switch)
-        self.setup_way_points("controllers/configs/full.slas")
-        self.load_routing_lfa("controllers/configs/link_failure_map_generated.json")
+        self.setup_way_points(self.base_path + "/configs/full.slas")
+        self.load_routing_lfa(self.base_path + "/configs/link_failure_map_generated.json")
         self.setup_meters()
 
         # Configure mirroring session to cpu port for failure notifications
