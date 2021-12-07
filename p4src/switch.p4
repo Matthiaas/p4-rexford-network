@@ -390,9 +390,11 @@ control MyIngress(inout headers hdr,
             // Read the address and port of the host.
             rexfordAddr_t host_addr;
             bit<9> host_port;
+            bool from_host;
 
             host_address_reg.read(host_addr, 0);
             host_port_reg.read(host_port, 0);
+            from_host = host_port == std_meta.ingress_port;
 
             // first thing first, check if packet is protected
             if (hdr.rexford_ipv4.isValid()){
@@ -419,24 +421,23 @@ control MyIngress(inout headers hdr,
 
             set_meta_ports();
 
-            if(hdr.ethernet.isValid() && hdr.udp.isValid()) {
+            
+            if(from_host && hdr.udp.isValid()) {
+                // Maybe setup waypoint if packet comes from host.
                 meta.next_destination = (bit<4>) hdr.ipv4.dst_rexford_addr;   
-                // Maybe setup waypoint.
-                udp_waypoint.apply();           
+                udp_waypoint.apply();    
             }
 
+            // Check if the waypoint was reached.
             bool reached_waypoint = false;
-            // Check if the packet is a waypointed one.
             if (hdr.waypoint.isValid()) {
-                // Check if we reached the waypoint.
                 if (hdr.waypoint.waypoint == host_addr) {
-                    // We reached the waypoint.
                     reached_waypoint = true;
                 }
             }
 
-            if ((!hdr.waypoint.isValid() && hdr.ethernet.isValid()) || reached_waypoint) {
-                // Packet comes from host or just reached the waypoint here.
+            if ((!hdr.waypoint.isValid() && from_host) || reached_waypoint) {
+                // Packet comes from host and is not waypointed, or just reached the waypoint here.
                 // Only consider packets that come from a host that are not waypointed.
                 // This is because waypointed traffic is not allowed to change the headers to be recognised by the tests.
                 debug.write((bit<32>)2,(bit<1>)1);
