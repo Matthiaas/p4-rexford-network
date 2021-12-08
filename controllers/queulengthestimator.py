@@ -31,15 +31,18 @@ def estimate_queu_len_thread(cont, time_interval):
     max_queu_len = 1500 * 100
     while True:
         for i in range(max_ports):
-            curr_time = current_sec_time()
-            newbyte_count, _ = cont.counter_read("port_bytes_out", i) 
-            time_passed = curr_time - last_timestamp[i]
-            last_timestamp[i] = curr_time
-            added = newbyte_count - last_counts[i]
-            last_counts[i] = newbyte_count
-            lost = 1250000 * time_passed 
-            est_queue_len[i] = min(max(0,est_queue_len[i] + added - lost), max_queu_len)
-            cont.register_write("estimated_queue_len", i, int(est_queue_len[i] / 1500 ))
+            try:
+                curr_time = current_sec_time()
+                newbyte_count, _ = cont.counter_read("port_bytes_out", i) 
+                time_passed = curr_time - last_timestamp[i]
+                last_timestamp[i] = curr_time
+                added = newbyte_count - last_counts[i]
+                last_counts[i] = newbyte_count
+                lost = 1250000 * time_passed 
+                est_queue_len[i] = min(max(0,est_queue_len[i] + added - lost), max_queu_len)
+                cont.register_write("estimated_queue_len", i, int(est_queue_len[i] / 1500 ))
+            except:
+                continue
         time.sleep(time_interval)
 
 class QueueLengthEstimator(object):

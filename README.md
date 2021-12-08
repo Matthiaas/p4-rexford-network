@@ -18,9 +18,10 @@
 In this section, note down 1 or 2 sentences *per team member* outlining everyone's contribution to the project. We want to see that everybody contributed, but you don't need to get into fine details. For example, write who contributed to which feature of your solution, but do *not* write who implemented a particular function. 
 
 ### Francesco Intoci
-- Compute routing tabels + LFA + RLFA
-- Failure detection/ recovery including hearthbeats
-- TODO ...
+- Routing table computation, including first version of ECMP paths.
+- Implementation of per-destination LFAs.
+- Implementation of PQ algorithm for RLFAs.
+- Failure detection and recovery through heartbeat messages.
 
 ### Westermann Floris
 - Compute Failure Configurations

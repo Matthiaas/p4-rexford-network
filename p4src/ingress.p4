@@ -376,6 +376,7 @@ control MyIngress(inout headers hdr,
                     meta.hb_port = hdr.heartbeat.port;
                     meta.hb_failed_link = 1;
                     meta.hb_recovered_link = 0;
+                    //host_address_reg.read(meta.hb_switch_addr, 0);
                     clone3(CloneType.I2E, 100, meta); //this yields a compilation error due to a bug in their src code
                 }
                 //check last time we sent something to this port
@@ -397,12 +398,13 @@ control MyIngress(inout headers hdr,
                     meta.hb_port = std_meta.ingress_port;
                     meta.hb_failed_link = 0;
                     meta.hb_recovered_link = 1;
+                    //host_address_reg.read(meta.hb_switch_addr, 0);
                     clone3(CloneType.I2E, 100, meta);
                 }
                 meta.drop_packet = true;
             }
             if (meta.drop_packet == true){
-                drop();
+                mark_to_drop(std_meta);
             }
         } else {
             //Normal traffic
@@ -421,7 +423,7 @@ control MyIngress(inout headers hdr,
 
             // first thing first, check if packet is protected
             if (hdr.rexford_ipv4.isValid()){
-                debug.write((bit<32>)0,(bit<1>)1);
+                //debug.write((bit<32>)0,(bit<1>)1);
                 if (hdr.rexford_ipv4.rlfa_protected == 1){
                     if (hdr.rexford_ipv4.dstAddr == host_addr){
                         // reached rlfa -> set real destination
@@ -432,7 +434,7 @@ control MyIngress(inout headers hdr,
             }
 
             if (hdr.waypoint.isValid()){
-                debug.write((bit<32>)1,(bit<1>)1);
+                //debug.write((bit<32>)1,(bit<1>)1);
                 if (hdr.waypoint.rlfa_protected == 1){
                     if (hdr.waypoint.waypoint == host_addr){
                         // reached rlfa -> set real destination
