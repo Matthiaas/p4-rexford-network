@@ -271,10 +271,16 @@ control MyIngress(inout headers hdr,
     action drop_based_on_queue_length_and_traffic_class() {
         bit<32> queueLen;
         estimated_queue_len.read(queueLen, (bit<32>) std_meta.egress_spec);
+        bit<32> queueLen2;
+        estimated_queue_len_v2.read(queueLen2, (bit<32>) std_meta.egress_spec);
+        if(queueLen2 > queueLen) {
+            queueLen = queueLen2;
+        }
         
         // This line for whatever reason lets the compiler give up.
        bit<32> dropProbability = 0;
 
+    /*
         // The values in here are pretty arbitrary. But tweeked by testing different numbers.
         if(!hdr.tcp.isValid() && !hdr.udp.isValid()) {
             // Priority 0.
@@ -283,53 +289,86 @@ control MyIngress(inout headers hdr,
             dropProbability = 0;
         } else if( meta.srcPort <= 100 && meta.dstPort <= 100) {
             // Priority 1.
-            if (queueLen > 20 && hdr.tcp.isValid()) {
-                times_ten(queueLen - 20, dropProbability);
+            if (queueLen > 25 && hdr.tcp.isValid()) {
+                times_ten(queueLen - 25, dropProbability);
             } else {
                 dropProbability = 0;
             }
         } else if( meta.srcPort <= 200 && meta.dstPort <= 200) {
             // Priority 2.
-            if (queueLen > 10) {
-                times_ten(queueLen - 10, dropProbability);
+            if (queueLen > 20) {
+                times_ten(queueLen - 20, dropProbability);
             } else {
                 dropProbability = 0;
             }
         } else if( meta.srcPort <= 300 && meta.dstPort <= 300) {
-            // Priority 5.
-            if (queueLen > 0) {
-                // Give this some higher dropping prob since its low prio.
-                times_ten(queueLen + 20, dropProbability);
+            // Priority 3.
+            if (queueLen > 15 ) {
+                times_ten(queueLen - 15, dropProbability);
             } else {
                 dropProbability = 0;
             }
         } else if( meta.srcPort <= 400 && meta.dstPort <= 400) {
-            // Priority 3.
-            if (queueLen > 7) {
-                times_ten(queueLen - 7, dropProbability);
-            } else {
-                dropProbability = 0;
-            }
-        } else if( meta.srcPort <= 65000 && meta.dstPort <= 65000 &&
-                    60001 <= meta.srcPort && 60001 <= meta.dstPort) {
             // Priority 4.
-            dropProbability = 0;
             if (queueLen > 0) {
                 times_ten(queueLen, dropProbability);
             } else {
                 dropProbability = 0;
             }
+        } else if( meta.srcPort <= 65000 && meta.dstPort <= 65000 &&
+                    60001 <= meta.srcPort && 60001 <= meta.dstPort) {
+            // Lowest priority (Its only 3SLAs and we dont know how weird it is going to be).
+            // Priority 5.
+            dropProbability = 0;
+            if (queueLen > 0) {
+                dropProbability = 100;
+            } else {
+                dropProbability = 0;
+            }
+            
         } else {
             // Traffic is not considered in any SLA.
             dropProbability = 1;
         }
-
+        */
+        // This seems to outperfrom the priority stuff.
+        // TODO: Test this for failures.
+        if(!hdr.tcp.isValid() && !hdr.udp.isValid()) {
+            // Priority 0.
+            // Internal traffic like heartbeats.
+            // Never drop them.
+            dropProbability = 0;
+        } else if( meta.srcPort <= 65000 && meta.dstPort <= 65000 
+                    && 60001 <= meta.srcPort && 60001 <= meta.dstPort
+                        && queueLen > 0) {
+            dropProbability = 100;           
+        } else {
+            if(queueLen > 7) {
+                queueLen = queueLen - 7;
+                dropProbability = (queueLen << 2) + (queueLen);
+            }
+        }
         random_drop(dropProbability);
+    }
+
+    action update_queue_length_estimate_v2() {
+        @atomic {
+            bit<32> queueLen = 0;
+            estimated_queue_len_v2.read(queueLen, (bit<32>) hdr.heartbeat.port);
+            if(queueLen >= 1) {
+                queueLen = queueLen - 1;
+            }
+            if(queueLen >= 1) {
+                queueLen = queueLen - 1;
+            }
+            estimated_queue_len_v2.write((bit<32>) hdr.heartbeat.port, queueLen);
+        }
     }
 
     apply {
         if (hdr.heartbeat.isValid()){
             if (hdr.heartbeat.from_cp == 1){
+                update_queue_length_estimate_v2();
                 // From cont -> check last rec timestamp
                 get_rec_tstp_for_port(hdr.heartbeat.port);
                 if (meta.timestamp != 0 && (std_meta.ingress_global_timestamp - meta.timestamp > THRESHOLD_REC)){
@@ -338,6 +377,7 @@ control MyIngress(inout headers hdr,
                     meta.hb_port = hdr.heartbeat.port;
                     meta.hb_failed_link = 1;
                     meta.hb_recovered_link = 0;
+                    //host_address_reg.read(meta.hb_switch_addr, 0);
                     clone3(CloneType.I2E, 100, meta); //this yields a compilation error due to a bug in their src code
                 }
                 //check last time we sent something to this port
@@ -359,12 +399,13 @@ control MyIngress(inout headers hdr,
                     meta.hb_port = std_meta.ingress_port;
                     meta.hb_failed_link = 0;
                     meta.hb_recovered_link = 1;
+                    //host_address_reg.read(meta.hb_switch_addr, 0);
                     clone3(CloneType.I2E, 100, meta);
                 }
                 meta.drop_packet = true;
             }
             if (meta.drop_packet == true){
-                drop();
+                mark_to_drop(std_meta);
             }
         } else {
             //Normal traffic
@@ -383,7 +424,7 @@ control MyIngress(inout headers hdr,
 
             // first thing first, check if packet is protected
             if (hdr.rexford_ipv4.isValid()){
-                debug.write((bit<32>)0,(bit<1>)1);
+                //debug.write((bit<32>)0,(bit<1>)1);
                 if (hdr.rexford_ipv4.rlfa_protected == 1){
                     if (hdr.rexford_ipv4.dstAddr == host_addr){
                         // reached rlfa -> set real destination
@@ -394,7 +435,7 @@ control MyIngress(inout headers hdr,
             }
 
             if (hdr.waypoint.isValid()){
-                debug.write((bit<32>)1,(bit<1>)1);
+                //debug.write((bit<32>)1,(bit<1>)1);
                 if (hdr.waypoint.rlfa_protected == 1){
                     if (hdr.waypoint.waypoint == host_addr){
                         // reached rlfa -> set real destination
@@ -465,31 +506,33 @@ control MyIngress(inout headers hdr,
             }
             //check nexthop status and in case route using the lfa or rlfa
             final_forward.apply();
-            
-            // This applies the meter. 
-            // - Yellow: Defines a threshold where we drop a single packet in order to make sure the TCP flow does not 
-            //           further increase its rate in the future. This is based on:
-            //            https://www.researchgate.net/publication/301857331_Global_Synchronization_Protection_for_Bandwidth_Sharing_TCP_Flows_in_High-Speed_Links
-            // - Red: We exceed the max bandwith with the max queulength 
-            //      --> We are forced to drop every packet to not increase the delay by to much. 
-            // (This can not be put into its own action since it conditionally calls actions.) -> We can feel the pain
-            bit<2> congestion_tag;
-            port_congestion_meter.execute_meter((bit<32>) std_meta.egress_spec, congestion_tag);
-            if(congestion_tag == V1MODEL_METER_COLOR_YELLOW) {
-                if(hdr.tcp.isValid()) {
-                    bit<1> dopped_flowlet;
-                    flowlet_dropped.read(dopped_flowlet, (bit<32>)meta.flowlet_register_index);
-                    if(dopped_flowlet == 0) {
-                        meta.drop_packet = true;
-                        flowlet_dropped.write((bit<32>)meta.flowlet_register_index, 1);
-                        flowlet_lastdrop_time_stamp.write((bit<32>)meta.flowlet_register_index, std_meta.ingress_global_timestamp);
-                    }
-                }
-            } else if(congestion_tag == V1MODEL_METER_COLOR_RED) {
-                meta.drop_packet = true;
-            }
 
             drop_based_on_queue_length_and_traffic_class();
+            
+            if(!meta.drop_packet) {
+                // This applies the meter. 
+                // - Yellow: Defines a threshold where we drop a single packet in order to make sure the TCP flow does not 
+                //           further increase its rate in the future. This is based on:
+                //            https://www.researchgate.net/publication/301857331_Global_Synchronization_Protection_for_Bandwidth_Sharing_TCP_Flows_in_High-Speed_Links
+                // - Red: We exceed the max bandwith with the max queulength 
+                //      --> We are forced to drop every packet to not increase the delay by to much. 
+                // (This can not be put into its own action since it conditionally calls actions.) -> We can feel the pain
+                bit<2> congestion_tag;
+                port_congestion_meter.execute_meter((bit<32>) std_meta.egress_spec, congestion_tag);
+                if(congestion_tag == V1MODEL_METER_COLOR_YELLOW) {
+                    if(hdr.tcp.isValid()) {
+                        bit<1> dopped_flowlet;
+                        flowlet_dropped.read(dopped_flowlet, (bit<32>)meta.flowlet_register_index);
+                        if(dopped_flowlet == 0) {
+                            meta.drop_packet = true;
+                            flowlet_dropped.write((bit<32>)meta.flowlet_register_index, 1);
+                            flowlet_lastdrop_time_stamp.write((bit<32>)meta.flowlet_register_index, std_meta.ingress_global_timestamp);
+                        }
+                    }
+                } else if(congestion_tag == V1MODEL_METER_COLOR_RED) {
+                    meta.drop_packet = true;
+                }
+            }
          
             // Only drop if packet is not going to the host.
             if (meta.drop_packet && std_meta.egress_spec != host_port) {

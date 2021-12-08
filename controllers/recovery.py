@@ -127,7 +127,7 @@ class Fast_Recovery_Manager(object):
         self.failure_rts, self.failures_rlfas = Fast_Recovery_Manager.__load_link_fail_map(links_fail_file)
         self.topo: Graph = topo  # passed by controller
         self.switches: List[str] = self.topo.get_p4switches().keys()
-        self.hosts: List[str] = self.topo.get_hosts()
+        self.hosts: List[str] = self.topo.get_hosts().keys()
 
 
     ##############################
@@ -415,7 +415,7 @@ class Fast_Recovery_Manager(object):
         return scenario
 
     @staticmethod
-    def precompute_routing(graph_original: Graph, switches: List[str], hosts, all_failures: List[List[Tuple[str, str]]] = None):
+    def precompute_routing(graph: Graph, switches: List[str], hosts, all_failures: List[List[Tuple[str, str]]] = None):
         """
             Given a (sub)set of all possible failures from config, computes the routing table for all switches
             and dumps it into config
@@ -427,7 +427,7 @@ class Fast_Recovery_Manager(object):
             if not all_failures:
                 all_failures = [None]
             for failures in all_failures:
-                scenario = Fast_Recovery_Manager.__form_routing(graph_original, switches, hosts, failures)
+                scenario = Fast_Recovery_Manager.__form_routing(graph, switches, hosts, failures)
                 scenarios.append(scenario)
             map["map"] = scenarios
             json.dump(map, f)
@@ -448,6 +448,8 @@ class Fast_Recovery_Manager(object):
         except KeyError:
             scenario = Fast_Recovery_Manager.__form_routing(self.topo, self.switches, self.hosts, failures)
             print(f"Scenario not found in config. Recomputing...")
+            print("[*] Scenario:\n")
+            print(scenario)
             return scenario["routing_tbl"], scenario["Rlfas"]
 
     
