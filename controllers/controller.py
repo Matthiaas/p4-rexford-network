@@ -218,6 +218,30 @@ class Controller(object):
             red = (pir, pbs)
             controller.meter_array_set_rates("port_congestion_meter", [yellow, red])
 
+            yellow = (cir, cbs)
+            red = (peak_rate, 5 * packet_size)
+            controller.meter_array_set_rates("queu_len_5", [yellow, red])
+
+            red = (peak_rate, 10 * packet_size)
+            controller.meter_array_set_rates("queu_len_10", [yellow, red])
+
+            red = (peak_rate, 15 * packet_size)
+            controller.meter_array_set_rates("queu_len_15", [yellow, red])
+
+            red = (peak_rate, 20 * packet_size)
+            controller.meter_array_set_rates("queu_len_20", [yellow, red])
+
+            red = (peak_rate, 25 * packet_size)
+            controller.meter_array_set_rates("queu_len_25", [yellow, red])
+
+            red = (peak_rate, 30 * packet_size)
+            controller.meter_array_set_rates("queu_len_30", [yellow, red])
+
+            red = (peak_rate, 35 * packet_size)
+            controller.meter_array_set_rates("queu_len_35", [yellow, red])
+
+            red = (peak_rate, 40 * packet_size)
+            controller.meter_array_set_rates("queu_len_40", [yellow, red])
 
     def connect_to_switches(self):
         """Connects to switches"""

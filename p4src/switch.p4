@@ -17,6 +17,9 @@
 #define DROP_FLOWLET_TIMEOUT 48w100000 // 0.1s
 #define MAX_SCMP_SPLITS 3
 
+// Globals:
+register<bit<32>>(MAX_PORTS) estimated_queue_len_v2;
+
 #include "ingress.p4"
 #include "egress.p4"
 
