@@ -123,30 +123,27 @@ class Controller(object):
         #         #
         ###########
 
+        def modifiy_or_add(cont, table_name, action_name, match_keys, action_params=[]):
+            entry_handle = None
+            if not init:
+                # No need to try to update the entry when we init.
+                entry_handle = cont.get_handle_from_match(table_name, match_keys)
+            if entry_handle is not None:
+                cont.table_modify(table_name, action_name, entry_handle, action_params)
+            else:
+                cont.table_add(table_name, action_name, match_keys, action_params)
+
         # maps refxord addr or ecmp group to nexthop port and lfa if possible
         def add_set_next_hop(table_name, match_keys, next_port, lfa_port=None, init=True):
             if lfa_port:
-                if init:
-                    #add entry
-                    self.controllers[p4switch].table_add(
-                            table_name, action_name="set_nhop_and_lfa", 
-                                match_keys=match_keys, action_params=[next_port, lfa_port])
-                else:
-                    #modify entry
-                    self.controllers[p4switch].table_modify_match(
-                            table_name, action_name="set_nhop_and_lfa", 
-                                match_keys=match_keys, action_params=[next_port, lfa_port])
+                modifiy_or_add(cont=self.controllers[p4switch],
+                    table_name=table_name, action_name="set_nhop_and_lfa", 
+                        match_keys=match_keys, action_params=[next_port, lfa_port])
             else:
-                if init:
-                    #add entry
-                    self.controllers[p4switch].table_add(
-                            table_name, action_name="set_nhop", 
-                                match_keys=match_keys, action_params=[next_port])
-                else:
-                    #modify entry
-                    self.controllers[p4switch].table_add(
-                            table_name, action_name="set_nhop", 
-                                match_keys=match_keys, action_params=[next_port])
+                modifiy_or_add(cont=self.controllers[p4switch],
+                    table_name=table_name, action_name="set_nhop", 
+                        match_keys=match_keys, action_params=[next_port])
+
 
 
         def clear_tables(controller, table_names):
@@ -178,25 +175,18 @@ class Controller(object):
                 print("Adding nexthops and lfa:")
                 print([nexthopports, lfa_port])
             
-                if len(nexthopports) == 1:
+                if len([host_addr]) == 1:
+                    # We only need to set the nexthop and not any ESCP stuff.
                     add_set_next_hop("ipv4_forward", 
                             match_keys=[host_addr], 
                             next_port=nexthopports[0], 
                             lfa_port=lfa_port, init=init)
                 else:
-                    if init:
-                        #add entry
-                        self.controllers[p4switch].table_add(
-                                "ipv4_forward", 
-                                action_name="escmp_group", 
-                                match_keys=[host_addr],
-                                action_params=[str(ecmp_group_id), str(len(nexthopports)), str(len(nexthopports))])
-                    else:
-                        #modify existing entry
-                        self.controllers[p4switch].table_modify_match(
-                                "ipv4_forward", 
-                                action_name="escmp_group", 
-                                match_keys=[host_addr], action_params=[str(ecmp_group_id), str(len(nexthopports)), str(len(nexthopports))])
+                    modifiy_or_add(cont=self.controllers[p4switch],
+                            table_name="ipv4_forward", 
+                            action_name="escmp_group", 
+                            match_keys=[host_addr],
+                            action_params=[str(ecmp_group_id), str(len(nexthopports)), str(len(nexthopports))])
                     port_hash = 0
                     for nextport in nexthopports:
                         # Why are we setting lfa if ecmp?
@@ -221,20 +211,11 @@ class Controller(object):
                         if nh != neigh:
                             rlfa_port = self.topo.node_to_node_port_num(p4switch, nh)
                     print(f"Adding Rlfa link {p4switch}--{neigh} rlfa: {rlfa} port: {rlfa_port}")
-                    if init:
-                        #add entry
-                        self.controllers[p4switch].table_add(\
-                                table_name="final_forward",
-                                action_name="set_nexthop_lfa_rlfa",
-                                match_keys=[str(link_port)],
-                                action_params=[rlfa_host, str(rlfa_port)])
-                    else:
-                        #modify entry
-                        self.controllers[p4switch].table_modify_match(\
-                                table_name="final_forward",
-                                action_name="set_nexthop_lfa_rlfa",
-                                match_keys=[str(link_port)],
-                                action_params=[rlfa_host, str(rlfa_port)])
+                    modifiy_or_add(cont=self.controllers[p4switch],
+                            table_name="final_forward",
+                            action_name="set_nexthop_lfa_rlfa",
+                            match_keys=[str(link_port)],
+                            action_params=[rlfa_host, str(rlfa_port)])
 
                 
     def setup_meters(self):
@@ -318,26 +299,14 @@ class Controller(object):
                     self.failed_links.add(failed_link)
                     routing_tables, Rlfas = self.recovery_manager.query_routing_state(self.failed_links)
                     print(f"Got routing table and rlfas. Loading...")
-                    while True:
-                        try:
-                            self.load_routing_table(routing_tables, Rlfas, False)
-                            break
-                        except:
-                            time.sleep(0.00001)
-                            continue
+                    self.load_routing_table(routing_tables, Rlfas, False)
             if recovered == 1:
                 print("Notification for link restored {} received", format(failed_link))
                 if failed_link in self.failed_links:
                     self.failed_links.remove(failed_link)
                     routing_tables, Rlfas = self.recovery_manager.query_routing_state(self.failed_links)
                     print(f"Got routing table and rlfas. Loading...")
-                    while True:
-                        try:
-                            self.load_routing_table(routing_tables, Rlfas, False)
-                            break
-                        except:
-                            time.sleep(0.00001)
-                            continue
+                    self.load_routing_table(routing_tables, Rlfas, False)
                 #else:
                 #    raise FailureNotFound()
 
