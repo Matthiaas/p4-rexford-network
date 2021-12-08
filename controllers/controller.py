@@ -1,4 +1,3 @@
-"""Template of an empty global controller"""
 import argparse
 from p4utils.utils.helper import load_topo
 from p4utils.utils.sswitch_thrift_API import SimpleSwitchThriftAPI
@@ -10,10 +9,8 @@ from scapy.all import *
 import pathlib
 import sys
 import os
-
-
 import way_point_reader as wpr
-
+from errors import *
 
 #define here table names
 TABLES = ["ipv4_forward", "escmp_group_to_nhop", "final_forward"]
@@ -25,6 +22,7 @@ class Controller(object):
         self.base_traffic_file = base_traffic
         self.topo = load_topo('topology.json')
         self.controllers = {}
+        self.rexford_addr_lookup = {}
         self.failed_links = set() #current set of failed links
         path = sys.argv[0]
         self.base_path  = "/".join(path.split("/")[:-1])
@@ -79,6 +77,7 @@ class Controller(object):
             # TODO: This is an awfull hack. We should either use tables or use 5 bit as adresses or so.
             # See switch.p4
             addr = "0"
+        self.rexford_addr_lookup[int(addr)] = host_name
         return addr
 
 
@@ -237,7 +236,7 @@ class Controller(object):
         """Processes received packets to detect failure notifications"""
 
         interface = pkt.sniffed_on
-        switch_name = interface.split("-")[0]
+        switch_name_int = interface.split("-")[0]
         pkt_raw = raw(pkt)
         pkt_bin = format(int.from_bytes(pkt, byteorder='big'), '0112b')
         eth_type = int(pkt_bin[-16:], 2)
@@ -245,32 +244,31 @@ class Controller(object):
             port = int(pkt_bin[0:9],2)
             failed = int(pkt_bin[10],2)
             recovered = int(pkt_bin[11],2)
+            switch_host_addr =  int(pkt_bin[12:16],2)
+            switch_name = self.get_switch_of_host(self.rexford_addr_lookup[switch_host_addr])
+            neighbor = self.topo.port_to_node(switch_name, port)
+            failed_link = tuple(sorted([switch_name, neighbor]))
+            print(f"hb {switch_name} {neighbor} {port}")
+            print(switch_name_int == switch_name)
             if failed == 1:
                 # get other side of the link using port
-                neighbor = self.topo.port_to_node(switch_name, port)
                 # detect the failed link
-                failed_link = tuple(sorted([switch_name, neighbor]))
                 # if it is not a duplicated notification
+                print("Notification for link failure {} received", format(failed_link))
                 if failed_link not in self.failed_links:
-                    print(f"fail {switch_name} {neighbor} {port}")
-                    print("Notification for link failure {} received", format(failed_link))
                     self.failed_links.add(failed_link)
-                    print(f"Got routing table and rlfas. Loading...")
                     routing_tables, Rlfas = self.recovery_manager.query_routing_state(self.failed_links)
+                    print(f"Got routing table and rlfas. Loading...")
                     self.load_routing_table(routing_tables, Rlfas)
             if recovered == 1:
-                neighbor = self.topo.port_to_node(switch_name, port)
-                # detect the failed link
-                failed_link = tuple(sorted([switch_name, neighbor]))
+                print("Notification for link restored {} received", format(failed_link))
                 if failed_link in self.failed_links:
-                    print(f"Switch {switch_name} neigh {neighbor} port {port}")
-                    print("Notification for link restored {} received", format(failed_link))
                     self.failed_links.remove(failed_link)
                     routing_tables, Rlfas = self.recovery_manager.query_routing_state(self.failed_links)
                     print(f"Got routing table and rlfas. Loading...")
                     self.load_routing_table(routing_tables, Rlfas)
-                else:
-                    raise FailedLinkNotFound()
+                #else:
+                #    raise FailureNotFound()
 
     def run_cpu_port_loop(self):
         """Sniffs traffic coming from switches"""

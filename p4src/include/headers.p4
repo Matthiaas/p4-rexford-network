@@ -45,6 +45,7 @@ struct metadata {
     bit<9> hb_port;
     bit<1> hb_failed_link; 
     bit<1> hb_recovered_link;
+    rexfordAddr_t hb_switch_addr;
 
     port_t srcPort;
     port_t dstPort;
@@ -82,7 +83,8 @@ header heartbeat_t {
     bit<1> from_cp;
     bit<1> failed_link;
     bit<1> recovered_link;
-    bit<84> padding;
+    rexfordAddr_t switch_addr;
+    bit<80> padding;
     bit<16> etherType;
 }
 
