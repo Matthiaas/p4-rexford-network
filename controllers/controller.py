@@ -112,8 +112,11 @@ class Controller(object):
                 match_keys=[dst_addr], action_params=[wp_addr])
     
 
-    def load_routing_table(self, routing_tables, Rlfas):
-        """Loads routing tables into switch"""
+    def load_routing_table(self, routing_tables, Rlfas, init=True):
+        """
+            Loads routing tables, including Rlfas, into switch. Additionally init is used if
+            tables have to be created from scratch or rather modified.
+        """
         ###########
         #         #
         # HELPERS #
@@ -121,15 +124,30 @@ class Controller(object):
         ###########
 
         # maps refxord addr or ecmp group to nexthop port and lfa if possible
-        def add_set_next_hop(table_name, match_keys, next_port, lfa_port=None):
+        def add_set_next_hop(table_name, match_keys, next_port, lfa_port=None, init=True):
             if lfa_port:
-                self.controllers[p4switch].table_add(
-                        table_name, action_name="set_nhop_and_lfa", 
-                            match_keys=match_keys, action_params=[next_port, lfa_port])
-            else: 
-                self.controllers[p4switch].table_add(
-                        table_name, action_name="set_nhop", 
-                            match_keys=match_keys, action_params=[next_port])
+                if init:
+                    #add entry
+                    self.controllers[p4switch].table_add(
+                            table_name, action_name="set_nhop_and_lfa", 
+                                match_keys=match_keys, action_params=[next_port, lfa_port])
+                else:
+                    #modify entry
+                    self.controllers[p4switch].table_modify_match(
+                            table_name, action_name="set_nhop_and_lfa", 
+                                match_keys=match_keys, action_params=[next_port, lfa_port])
+            else:
+                if init:
+                    #add entry
+                    self.controllers[p4switch].table_add(
+                            table_name, action_name="set_nhop", 
+                                match_keys=match_keys, action_params=[next_port])
+                else:
+                    #modify entry
+                    self.controllers[p4switch].table_add(
+                            table_name, action_name="set_nhop", 
+                                match_keys=match_keys, action_params=[next_port])
+
 
         def clear_tables(controller, table_names):
             for table_name in table_names:
@@ -142,7 +160,7 @@ class Controller(object):
         ############
         for p4switch in self.topo.get_p4switches():
             #reset default state of tables
-            clear_tables(self.controllers[p4switch], TABLES)
+            #clear_tables(self.controllers[p4switch], TABLES)
             
             rt = routing_tables[p4switch]
             ecmp_group_id = 0
@@ -164,19 +182,29 @@ class Controller(object):
                     add_set_next_hop("ipv4_forward", 
                             match_keys=[host_addr], 
                             next_port=nexthopports[0], 
-                            lfa_port=lfa_port)
+                            lfa_port=lfa_port, init=init)
                 else:
-                    self.controllers[p4switch].table_add(
-                            "ipv4_forward", 
-                            action_name="escmp_group", 
-                            match_keys=[host_addr], action_params=[str(ecmp_group_id), str(len(nexthopports)), str(len(nexthopports))])
+                    if init:
+                        #add entry
+                        self.controllers[p4switch].table_add(
+                                "ipv4_forward", 
+                                action_name="escmp_group", 
+                                match_keys=[host_addr],
+                                action_params=[str(ecmp_group_id), str(len(nexthopports)), str(len(nexthopports))])
+                    else:
+                        #modify existing entry
+                        self.controllers[p4switch].table_modify_match(
+                                "ipv4_forward", 
+                                action_name="escmp_group", 
+                                match_keys=[host_addr], action_params=[str(ecmp_group_id), str(len(nexthopports)), str(len(nexthopports))])
                     port_hash = 0
                     for nextport in nexthopports:
                         # Why are we setting lfa if ecmp?
                         add_set_next_hop("escmp_group_to_nhop", 
                             match_keys=[str(ecmp_group_id), str(port_hash)], 
                             next_port=nextport, 
-                            lfa_port=lfa_port)
+                            lfa_port=lfa_port,
+                            init=init)
                         port_hash = port_hash + 1 
                     ecmp_group_id = ecmp_group_id + 1
                 
@@ -189,14 +217,24 @@ class Controller(object):
                     rlfa_host_nexthops = rt[self.get_host_of_switch(rlfa)]["nexthops"]
                     rlfa_port = 0
                     for nh in rlfa_host_nexthops:
+                        #clearly has to be different than the neigh for which the link fails
                         if nh != neigh:
                             rlfa_port = self.topo.node_to_node_port_num(p4switch, nh)
                     print(f"Adding Rlfa link {p4switch}--{neigh} rlfa: {rlfa} port: {rlfa_port}")
-                    self.controllers[p4switch].table_add(\
-                            table_name="final_forward",
-                            action_name="set_nexthop_lfa_rlfa",
-                            match_keys=[str(link_port)],
-                            action_params=[rlfa_host, str(rlfa_port)])
+                    if init:
+                        #add entry
+                        self.controllers[p4switch].table_add(\
+                                table_name="final_forward",
+                                action_name="set_nexthop_lfa_rlfa",
+                                match_keys=[str(link_port)],
+                                action_params=[rlfa_host, str(rlfa_port)])
+                    else:
+                        #modify entry
+                        self.controllers[p4switch].table_modify_match(\
+                                table_name="final_forward",
+                                action_name="set_nexthop_lfa_rlfa",
+                                match_keys=[str(link_port)],
+                                action_params=[rlfa_host, str(rlfa_port)])
 
                 
     def setup_meters(self):
@@ -258,10 +296,10 @@ class Controller(object):
                     print(f"Got routing table and rlfas. Loading...")
                     while True:
                         try:
-                            #self.load_routing_table(routing_tables, Rlfas)
+                            self.load_routing_table(routing_tables, Rlfas, False)
                             break
                         except:
-                            time.sleep(0.0001)
+                            time.sleep(0.00001)
                             continue
             if recovered == 1:
                 print("Notification for link restored {} received", format(failed_link))
@@ -271,19 +309,20 @@ class Controller(object):
                     print(f"Got routing table and rlfas. Loading...")
                     while True:
                         try:
-                            #self.load_routing_table(routing_tables, Rlfas)
+                            self.load_routing_table(routing_tables, Rlfas, False)
                             break
                         except:
-                            time.sleep(0.0001)
+                            time.sleep(0.00001)
                             continue
                 #else:
                 #    raise FailureNotFound()
 
+
     def run_cpu_port_loop(self):
         """Sniffs traffic coming from switches"""
         cpu_interfaces = [str(self.topo.get_cpu_port_intf(sw_name).replace("eth0", "eth1")) for sw_name in self.controllers]
-        print(cpu_interfaces)
         sniff(iface=cpu_interfaces, prn=self.process_packet)
+
 
     def run(self):
         """Run function"""
