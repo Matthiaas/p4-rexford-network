@@ -338,7 +338,7 @@ control MyIngress(inout headers hdr,
                     meta.hb_port = hdr.heartbeat.port;
                     meta.hb_failed_link = 1;
                     meta.hb_recovered_link = 0;
-                    host_address_reg.read(meta.hb_switch_addr, 0);
+                    //host_address_reg.read(meta.hb_switch_addr, 0);
                     clone3(CloneType.I2E, 100, meta); //this yields a compilation error due to a bug in their src code
                 }
                 //check last time we sent something to this port
@@ -360,13 +360,13 @@ control MyIngress(inout headers hdr,
                     meta.hb_port = std_meta.ingress_port;
                     meta.hb_failed_link = 0;
                     meta.hb_recovered_link = 1;
-                    host_address_reg.read(meta.hb_switch_addr, 0);
+                    //host_address_reg.read(meta.hb_switch_addr, 0);
                     clone3(CloneType.I2E, 100, meta);
                 }
                 meta.drop_packet = true;
             }
             if (meta.drop_packet == true){
-                drop();
+                mark_to_drop(std_meta);
             }
         } else {
             //Normal traffic

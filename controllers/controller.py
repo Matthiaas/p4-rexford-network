@@ -236,7 +236,7 @@ class Controller(object):
         """Processes received packets to detect failure notifications"""
 
         interface = pkt.sniffed_on
-        switch_name_int = interface.split("-")[0]
+        switch_name = interface.split("-")[0]
         pkt_raw = raw(pkt)
         pkt_bin = format(int.from_bytes(pkt, byteorder='big'), '0112b')
         eth_type = int(pkt_bin[-16:], 2)
@@ -244,29 +244,38 @@ class Controller(object):
             port = int(pkt_bin[0:9],2)
             failed = int(pkt_bin[10],2)
             recovered = int(pkt_bin[11],2)
-            switch_host_addr =  int(pkt_bin[12:16],2)
-            switch_name = self.get_switch_of_host(self.rexford_addr_lookup[switch_host_addr])
             neighbor = self.topo.port_to_node(switch_name, port)
             failed_link = tuple(sorted([switch_name, neighbor]))
-            print(f"hb {switch_name} {neighbor} {port}")
-            print(switch_name_int == switch_name)
+            #print(f"[!] Heartbeat: {switch_name} {neighbor} {port}")
             if failed == 1:
                 # get other side of the link using port
                 # detect the failed link
                 # if it is not a duplicated notification
                 print("Notification for link failure {} received", format(failed_link))
-                if failed_link not in self.failed_links:
+                if failed_link not in self.failed_links and failed_link in FRM.get_non_bridges(self.topo):
                     self.failed_links.add(failed_link)
                     routing_tables, Rlfas = self.recovery_manager.query_routing_state(self.failed_links)
                     print(f"Got routing table and rlfas. Loading...")
-                    self.load_routing_table(routing_tables, Rlfas)
+                    while True:
+                        try:
+                            self.load_routing_table(routing_tables, Rlfas)
+                            break
+                        except:
+                            time.sleep(0.0001)
+                            continue
             if recovered == 1:
                 print("Notification for link restored {} received", format(failed_link))
                 if failed_link in self.failed_links:
                     self.failed_links.remove(failed_link)
                     routing_tables, Rlfas = self.recovery_manager.query_routing_state(self.failed_links)
                     print(f"Got routing table and rlfas. Loading...")
-                    self.load_routing_table(routing_tables, Rlfas)
+                    while True:
+                        try:
+                            self.load_routing_table(routing_tables, Rlfas)
+                            break
+                        except:
+                            time.sleep(0.0001)
+                            continue
                 #else:
                 #    raise FailureNotFound()
 

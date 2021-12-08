@@ -51,13 +51,13 @@
         ["res_5", 32, false],
         ["cond_8", 1, false],
         ["tmp_24", 32, false],
+        ["tmp_25", 32, false],
         ["userMetadata.next_destination", 4, false],
         ["userMetadata.linkState", 1, false],
         ["userMetadata.timestamp", 48, false],
         ["userMetadata.hb_port", 9, false],
         ["userMetadata.hb_failed_link", 1, false],
         ["userMetadata.hb_recovered_link", 1, false],
-        ["userMetadata.hb_switch_addr", 4, false],
         ["userMetadata.srcPort", 16, false],
         ["userMetadata.dstPort", 16, false],
         ["userMetadata.traffic_class", 3, false],
@@ -70,7 +70,7 @@
         ["userMetadata.flowlet_id", 16, false],
         ["userMetadata.lfa", 9, false],
         ["userMetadata.drop_packet", 1, false],
-        ["_padding_0", 1, false]
+        ["_padding_0", 5, false]
       ]
     },
     {
@@ -113,8 +113,7 @@
         ["from_cp", 1, false],
         ["failed_link", 1, false],
         ["recovered_link", 1, false],
-        ["switch_addr", 4, false],
-        ["padding", 80, false],
+        ["padding", 84, false],
         ["etherType", 16, false]
       ]
     },
@@ -313,10 +312,6 @@
         },
         {
           "type" : "field",
-          "value" : ["scalars", "userMetadata.hb_switch_addr"]
-        },
-        {
-          "type" : "field",
           "value" : ["scalars", "userMetadata.srcPort"]
         },
         {
@@ -398,10 +393,6 @@
         {
           "type" : "field",
           "value" : ["scalars", "userMetadata.hb_recovered_link"]
-        },
-        {
-          "type" : "field",
-          "value" : ["scalars", "userMetadata.hb_switch_addr"]
         },
         {
           "type" : "field",
@@ -1438,44 +1429,8 @@
       ]
     },
     {
-      "name" : "MyIngress.drop",
-      "id" : 5,
-      "runtime_data" : [],
-      "primitives" : [
-        {
-          "op" : "assign",
-          "parameters" : [
-            {
-              "type" : "field",
-              "value" : ["scalars", "userMetadata.drop_packet"]
-            },
-            {
-              "type" : "expression",
-              "value" : {
-                "type" : "expression",
-                "value" : {
-                  "op" : "b2d",
-                  "left" : null,
-                  "right" : {
-                    "type" : "bool",
-                    "value" : true
-                  }
-                }
-              }
-            }
-          ],
-          "source_info" : {
-            "filename" : "/home/p4/p4-tools/13_rexford/p4src/ingress.p4",
-            "line" : 44,
-            "column" : 8,
-            "source_fragment" : "meta.drop_packet = true"
-          }
-        }
-      ]
-    },
-    {
       "name" : "MyIngress.get_rec_tstp_for_port",
-      "id" : 6,
+      "id" : 5,
       "runtime_data" : [],
       "primitives" : [
         {
@@ -1537,7 +1492,7 @@
     },
     {
       "name" : "MyIngress.set_rec_tstp_for_port",
-      "id" : 7,
+      "id" : 6,
       "runtime_data" : [],
       "primitives" : [
         {
@@ -1599,7 +1554,7 @@
     },
     {
       "name" : "MyIngress.set_rec_tstp_for_port",
-      "id" : 8,
+      "id" : 7,
       "runtime_data" : [],
       "primitives" : [
         {
@@ -1661,7 +1616,7 @@
     },
     {
       "name" : "MyIngress.get_sent_tstp_for_port",
-      "id" : 9,
+      "id" : 8,
       "runtime_data" : [],
       "primitives" : [
         {
@@ -1723,7 +1678,7 @@
     },
     {
       "name" : "MyIngress.set_sent_tstp_for_port",
-      "id" : 10,
+      "id" : 9,
       "runtime_data" : [],
       "primitives" : [
         {
@@ -1785,7 +1740,7 @@
     },
     {
       "name" : "MyIngress.set_sent_tstp_for_port",
-      "id" : 11,
+      "id" : 10,
       "runtime_data" : [],
       "primitives" : [
         {
@@ -1847,7 +1802,7 @@
     },
     {
       "name" : "MyIngress.fail_linkState",
-      "id" : 12,
+      "id" : 11,
       "runtime_data" : [],
       "primitives" : [
         {
@@ -1909,7 +1864,7 @@
     },
     {
       "name" : "MyIngress.check_linkState",
-      "id" : 13,
+      "id" : 12,
       "runtime_data" : [],
       "primitives" : [
         {
@@ -1971,7 +1926,7 @@
     },
     {
       "name" : "MyIngress.recover_linkState",
-      "id" : 14,
+      "id" : 13,
       "runtime_data" : [],
       "primitives" : [
         {
@@ -2033,7 +1988,7 @@
     },
     {
       "name" : "MyIngress.read_tcp_flowlet_registers",
-      "id" : 15,
+      "id" : 14,
       "runtime_data" : [],
       "primitives" : [
         {
@@ -2287,7 +2242,7 @@
     },
     {
       "name" : "MyIngress.update_udp_flowlet_id",
-      "id" : 16,
+      "id" : 15,
       "runtime_data" : [],
       "primitives" : [
         {
@@ -2349,7 +2304,7 @@
     },
     {
       "name" : "MyIngress.update_tcp_flowlet_id",
-      "id" : 17,
+      "id" : 16,
       "runtime_data" : [],
       "primitives" : [
         {
@@ -2498,7 +2453,7 @@
     },
     {
       "name" : "MyIngress.set_nhop",
-      "id" : 18,
+      "id" : 17,
       "runtime_data" : [
         {
           "name" : "port",
@@ -2548,7 +2503,7 @@
     },
     {
       "name" : "MyIngress.set_nhop",
-      "id" : 19,
+      "id" : 18,
       "runtime_data" : [
         {
           "name" : "port",
@@ -2592,6 +2547,60 @@
             "line" : 117,
             "column" : 8,
             "source_fragment" : "meta.lfa = 0"
+          }
+        }
+      ]
+    },
+    {
+      "name" : "MyIngress.set_nhop_and_lfa",
+      "id" : 19,
+      "runtime_data" : [
+        {
+          "name" : "port",
+          "bitwidth" : 9
+        },
+        {
+          "name" : "lfa",
+          "bitwidth" : 9
+        }
+      ],
+      "primitives" : [
+        {
+          "op" : "assign",
+          "parameters" : [
+            {
+              "type" : "field",
+              "value" : ["standard_metadata", "egress_spec"]
+            },
+            {
+              "type" : "runtime_data",
+              "value" : 0
+            }
+          ],
+          "source_info" : {
+            "filename" : "/home/p4/p4-tools/13_rexford/p4src/ingress.p4",
+            "line" : 121,
+            "column" : 8,
+            "source_fragment" : "std_meta.egress_spec = port"
+          }
+        },
+        {
+          "op" : "assign",
+          "parameters" : [
+            {
+              "type" : "field",
+              "value" : ["scalars", "userMetadata.lfa"]
+            },
+            {
+              "type" : "runtime_data",
+              "value" : 1
+            }
+          ],
+          "source_info" : {
+            "filename" : "/home/p4/p4-tools/13_rexford/p4src/ingress.p4",
+            "line" : 122,
+            "column" : 8,
+            "source_fragment" : "meta.lfa = lfa"
           }
         }
       ]
@@ -2651,62 +2660,8 @@
       ]
     },
     {
-      "name" : "MyIngress.set_nhop_and_lfa",
-      "id" : 21,
-      "runtime_data" : [
-        {
-          "name" : "port",
-          "bitwidth" : 9
-        },
-        {
-          "name" : "lfa",
-          "bitwidth" : 9
-        }
-      ],
-      "primitives" : [
-        {
-          "op" : "assign",
-          "parameters" : [
-            {
-              "type" : "field",
-              "value" : ["standard_metadata", "egress_spec"]
-            },
-            {
-              "type" : "runtime_data",
-              "value" : 0
-            }
-          ],
-          "source_info" : {
-            "filename" : "/home/p4/p4-tools/13_rexford/p4src/ingress.p4",
-            "line" : 121,
-            "column" : 8,
-            "source_fragment" : "std_meta.egress_spec = port"
-          }
-        },
-        {
-          "op" : "assign",
-          "parameters" : [
-            {
-              "type" : "field",
-              "value" : ["scalars", "userMetadata.lfa"]
-            },
-            {
-              "type" : "runtime_data",
-              "value" : 1
-            }
-          ],
-          "source_info" : {
-            "filename" : "/home/p4/p4-tools/13_rexford/p4src/ingress.p4",
-            "line" : 122,
-            "column" : 8,
-            "source_fragment" : "meta.lfa = lfa"
-          }
-        }
-      ]
-    },
-    {
       "name" : "MyIngress.escmp_group",
-      "id" : 22,
+      "id" : 21,
       "runtime_data" : [
         {
           "name" : "escmp_group_id",
@@ -2878,7 +2833,7 @@
     },
     {
       "name" : "MyIngress.set_waypoint",
-      "id" : 23,
+      "id" : 22,
       "runtime_data" : [
         {
           "name" : "waypoint",
@@ -2969,7 +2924,7 @@
     },
     {
       "name" : "MyIngress.set_nexthop_lfa_rlfa",
-      "id" : 24,
+      "id" : 23,
       "runtime_data" : [
         {
           "name" : "rlfa_host",
@@ -3845,7 +3800,7 @@
     },
     {
       "name" : "MyIngress.set_meta_ports",
-      "id" : 25,
+      "id" : 24,
       "runtime_data" : [],
       "primitives" : [
         {
@@ -4042,7 +3997,7 @@
     },
     {
       "name" : "MyIngress.construct_rexford_headers",
-      "id" : 26,
+      "id" : 25,
       "runtime_data" : [],
       "primitives" : [
         {
@@ -4344,7 +4299,7 @@
     },
     {
       "name" : "MyIngress.drop_based_on_queue_length_and_traffic_class",
-      "id" : 27,
+      "id" : 26,
       "runtime_data" : [],
       "primitives" : [
         {
@@ -9346,7 +9301,7 @@
     },
     {
       "name" : "ingress338",
-      "id" : 28,
+      "id" : 27,
       "runtime_data" : [],
       "primitives" : [
         {
@@ -9407,29 +9362,6 @@
           }
         },
         {
-          "op" : "register_read",
-          "parameters" : [
-            {
-              "type" : "field",
-              "value" : ["scalars", "userMetadata.hb_switch_addr"]
-            },
-            {
-              "type" : "register_array",
-              "value" : "MyIngress.host_address_reg"
-            },
-            {
-              "type" : "hexstr",
-              "value" : "0x00000000"
-            }
-          ],
-          "source_info" : {
-            "filename" : "/home/p4/p4-tools/13_rexford/p4src/ingress.p4",
-            "line" : 341,
-            "column" : 20,
-            "source_fragment" : "host_address_reg.read(meta.hb_switch_addr, 0)"
-          }
-        },
-        {
           "op" : "clone_ingress_pkt_to_egress",
           "parameters" : [
             {
@@ -9452,7 +9384,7 @@
     },
     {
       "name" : "ingress349",
-      "id" : 29,
+      "id" : 28,
       "runtime_data" : [],
       "primitives" : [
         {
@@ -9478,7 +9410,7 @@
     },
     {
       "name" : "ingress352",
-      "id" : 30,
+      "id" : 29,
       "runtime_data" : [],
       "primitives" : [
         {
@@ -9514,7 +9446,7 @@
     },
     {
       "name" : "ingress360",
-      "id" : 31,
+      "id" : 30,
       "runtime_data" : [],
       "primitives" : [
         {
@@ -9575,29 +9507,6 @@
           }
         },
         {
-          "op" : "register_read",
-          "parameters" : [
-            {
-              "type" : "field",
-              "value" : ["scalars", "userMetadata.hb_switch_addr"]
-            },
-            {
-              "type" : "register_array",
-              "value" : "MyIngress.host_address_reg"
-            },
-            {
-              "type" : "hexstr",
-              "value" : "0x00000000"
-            }
-          ],
-          "source_info" : {
-            "filename" : "/home/p4/p4-tools/13_rexford/p4src/ingress.p4",
-            "line" : 363,
-            "column" : 20,
-            "source_fragment" : "host_address_reg.read(meta.hb_switch_addr, 0)"
-          }
-        },
-        {
           "op" : "clone_ingress_pkt_to_egress",
           "parameters" : [
             {
@@ -9620,7 +9529,7 @@
     },
     {
       "name" : "ingress366",
-      "id" : 32,
+      "id" : 31,
       "runtime_data" : [],
       "primitives" : [
         {
@@ -9650,6 +9559,28 @@
             "line" : 366,
             "column" : 16,
             "source_fragment" : "meta.drop_packet = true"
+          }
+        }
+      ]
+    },
+    {
+      "name" : "ingress369",
+      "id" : 32,
+      "runtime_data" : [],
+      "primitives" : [
+        {
+          "op" : "mark_to_drop",
+          "parameters" : [
+            {
+              "type" : "header",
+              "value" : "standard_metadata"
+            }
+          ],
+          "source_info" : {
+            "filename" : "/home/p4/p4-tools/13_rexford/p4src/ingress.p4",
+            "line" : 369,
+            "column" : 16,
+            "source_fragment" : "mark_to_drop(std_meta)"
           }
         }
       ]
@@ -11072,32 +11003,6 @@
           "parameters" : [
             {
               "type" : "field",
-              "value" : ["heartbeat", "switch_addr"]
-            },
-            {
-              "type" : "field",
-              "value" : ["scalars", "userMetadata.hb_switch_addr"]
-            }
-          ],
-          "source_info" : {
-            "filename" : "/home/p4/p4-tools/13_rexford/p4src/egress.p4",
-            "line" : 73,
-            "column" : 12,
-            "source_fragment" : "hdr.heartbeat.switch_addr = meta.hb_switch_addr"
-          }
-        }
-      ]
-    },
-    {
-      "name" : "egress75",
-      "id" : 52,
-      "runtime_data" : [],
-      "primitives" : [
-        {
-          "op" : "assign",
-          "parameters" : [
-            {
-              "type" : "field",
               "value" : ["scalars", "tmp_24"]
             },
             {
@@ -11120,7 +11025,7 @@
           ],
           "source_info" : {
             "filename" : "/home/p4/p4-tools/13_rexford/p4src/egress.p4",
-            "line" : 75,
+            "line" : 74,
             "column" : 33,
             "source_fragment" : "(bit<32>) std_meta.egress_port"
           }
@@ -11139,7 +11044,65 @@
           ],
           "source_info" : {
             "filename" : "/home/p4/p4-tools/13_rexford/p4src/egress.p4",
-            "line" : 75,
+            "line" : 74,
+            "column" : 12,
+            "source_fragment" : "port_bytes_out.count((bit<32>) std_meta.egress_port)"
+          }
+        }
+      ]
+    },
+    {
+      "name" : "egress76",
+      "id" : 52,
+      "runtime_data" : [],
+      "primitives" : [
+        {
+          "op" : "assign",
+          "parameters" : [
+            {
+              "type" : "field",
+              "value" : ["scalars", "tmp_25"]
+            },
+            {
+              "type" : "expression",
+              "value" : {
+                "type" : "expression",
+                "value" : {
+                  "op" : "&",
+                  "left" : {
+                    "type" : "field",
+                    "value" : ["standard_metadata", "egress_port"]
+                  },
+                  "right" : {
+                    "type" : "hexstr",
+                    "value" : "0xffffffff"
+                  }
+                }
+              }
+            }
+          ],
+          "source_info" : {
+            "filename" : "/home/p4/p4-tools/13_rexford/p4src/egress.p4",
+            "line" : 76,
+            "column" : 33,
+            "source_fragment" : "(bit<32>) std_meta.egress_port"
+          }
+        },
+        {
+          "op" : "count",
+          "parameters" : [
+            {
+              "type" : "counter_array",
+              "value" : "MyEgress.port_bytes_out"
+            },
+            {
+              "type" : "field",
+              "value" : ["scalars", "tmp_25"]
+            }
+          ],
+          "source_info" : {
+            "filename" : "/home/p4/p4-tools/13_rexford/p4src/egress.p4",
+            "line" : 76,
             "column" : 12,
             "source_fragment" : "port_bytes_out.count((bit<32>) std_meta.egress_port)"
           }
@@ -11175,14 +11138,14 @@
           "with_counters" : false,
           "support_timeout" : false,
           "direct_meters" : null,
-          "action_ids" : [6],
+          "action_ids" : [5],
           "actions" : ["MyIngress.get_rec_tstp_for_port"],
           "base_default_next" : "node_5",
           "next_tables" : {
             "MyIngress.get_rec_tstp_for_port" : "node_5"
           },
           "default_entry" : {
-            "action_id" : 6,
+            "action_id" : 5,
             "action_const" : true,
             "action_data" : [],
             "action_entry_const" : true
@@ -11204,14 +11167,14 @@
           "with_counters" : false,
           "support_timeout" : false,
           "direct_meters" : null,
-          "action_ids" : [12],
+          "action_ids" : [11],
           "actions" : ["MyIngress.fail_linkState"],
           "base_default_next" : "tbl_ingress338",
           "next_tables" : {
             "MyIngress.fail_linkState" : "tbl_ingress338"
           },
           "default_entry" : {
-            "action_id" : 12,
+            "action_id" : 11,
             "action_const" : true,
             "action_data" : [],
             "action_entry_const" : true
@@ -11233,14 +11196,14 @@
           "with_counters" : false,
           "support_timeout" : false,
           "direct_meters" : null,
-          "action_ids" : [28],
+          "action_ids" : [27],
           "actions" : ["ingress338"],
           "base_default_next" : "tbl_get_sent_tstp_for_port",
           "next_tables" : {
             "ingress338" : "tbl_get_sent_tstp_for_port"
           },
           "default_entry" : {
-            "action_id" : 28,
+            "action_id" : 27,
             "action_const" : true,
             "action_data" : [],
             "action_entry_const" : true
@@ -11262,14 +11225,14 @@
           "with_counters" : false,
           "support_timeout" : false,
           "direct_meters" : null,
-          "action_ids" : [9],
+          "action_ids" : [8],
           "actions" : ["MyIngress.get_sent_tstp_for_port"],
           "base_default_next" : "node_9",
           "next_tables" : {
             "MyIngress.get_sent_tstp_for_port" : "node_9"
           },
           "default_entry" : {
-            "action_id" : 9,
+            "action_id" : 8,
             "action_const" : true,
             "action_data" : [],
             "action_entry_const" : true
@@ -11291,14 +11254,14 @@
           "with_counters" : false,
           "support_timeout" : false,
           "direct_meters" : null,
-          "action_ids" : [10],
+          "action_ids" : [9],
           "actions" : ["MyIngress.set_sent_tstp_for_port"],
           "base_default_next" : "tbl_ingress349",
           "next_tables" : {
             "MyIngress.set_sent_tstp_for_port" : "tbl_ingress349"
           },
           "default_entry" : {
-            "action_id" : 10,
+            "action_id" : 9,
             "action_const" : true,
             "action_data" : [],
             "action_entry_const" : true
@@ -11320,14 +11283,14 @@
           "with_counters" : false,
           "support_timeout" : false,
           "direct_meters" : null,
-          "action_ids" : [29],
+          "action_ids" : [28],
           "actions" : ["ingress349"],
           "base_default_next" : "node_19",
           "next_tables" : {
             "ingress349" : "node_19"
           },
           "default_entry" : {
-            "action_id" : 29,
+            "action_id" : 28,
             "action_const" : true,
             "action_data" : [],
             "action_entry_const" : true
@@ -11349,14 +11312,14 @@
           "with_counters" : false,
           "support_timeout" : false,
           "direct_meters" : null,
-          "action_ids" : [30],
+          "action_ids" : [29],
           "actions" : ["ingress352"],
           "base_default_next" : "node_19",
           "next_tables" : {
             "ingress352" : "node_19"
           },
           "default_entry" : {
-            "action_id" : 30,
+            "action_id" : 29,
             "action_const" : true,
             "action_data" : [],
             "action_entry_const" : true
@@ -11378,14 +11341,14 @@
           "with_counters" : false,
           "support_timeout" : false,
           "direct_meters" : null,
-          "action_ids" : [7],
+          "action_ids" : [6],
           "actions" : ["MyIngress.set_rec_tstp_for_port"],
           "base_default_next" : "tbl_check_linkState",
           "next_tables" : {
             "MyIngress.set_rec_tstp_for_port" : "tbl_check_linkState"
           },
           "default_entry" : {
-            "action_id" : 7,
+            "action_id" : 6,
             "action_const" : true,
             "action_data" : [],
             "action_entry_const" : true
@@ -11407,14 +11370,14 @@
           "with_counters" : false,
           "support_timeout" : false,
           "direct_meters" : null,
-          "action_ids" : [13],
+          "action_ids" : [12],
           "actions" : ["MyIngress.check_linkState"],
           "base_default_next" : "node_15",
           "next_tables" : {
             "MyIngress.check_linkState" : "node_15"
           },
           "default_entry" : {
-            "action_id" : 13,
+            "action_id" : 12,
             "action_const" : true,
             "action_data" : [],
             "action_entry_const" : true
@@ -11436,14 +11399,14 @@
           "with_counters" : false,
           "support_timeout" : false,
           "direct_meters" : null,
-          "action_ids" : [14],
+          "action_ids" : [13],
           "actions" : ["MyIngress.recover_linkState"],
           "base_default_next" : "tbl_ingress360",
           "next_tables" : {
             "MyIngress.recover_linkState" : "tbl_ingress360"
           },
           "default_entry" : {
-            "action_id" : 14,
+            "action_id" : 13,
             "action_const" : true,
             "action_data" : [],
             "action_entry_const" : true
@@ -11465,14 +11428,14 @@
           "with_counters" : false,
           "support_timeout" : false,
           "direct_meters" : null,
-          "action_ids" : [31],
+          "action_ids" : [30],
           "actions" : ["ingress360"],
           "base_default_next" : "tbl_ingress366",
           "next_tables" : {
             "ingress360" : "tbl_ingress366"
           },
           "default_entry" : {
-            "action_id" : 31,
+            "action_id" : 30,
             "action_const" : true,
             "action_data" : [],
             "action_entry_const" : true
@@ -11494,27 +11457,27 @@
           "with_counters" : false,
           "support_timeout" : false,
           "direct_meters" : null,
-          "action_ids" : [32],
+          "action_ids" : [31],
           "actions" : ["ingress366"],
           "base_default_next" : "node_19",
           "next_tables" : {
             "ingress366" : "node_19"
           },
           "default_entry" : {
-            "action_id" : 32,
+            "action_id" : 31,
             "action_const" : true,
             "action_data" : [],
             "action_entry_const" : true
           }
         },
         {
-          "name" : "tbl_drop",
+          "name" : "tbl_ingress369",
           "id" : 12,
           "source_info" : {
             "filename" : "/home/p4/p4-tools/13_rexford/p4src/ingress.p4",
             "line" : 369,
             "column" : 16,
-            "source_fragment" : "drop()"
+            "source_fragment" : "mark_to_drop(std_meta)"
           },
           "key" : [],
           "match_type" : "exact",
@@ -11523,14 +11486,14 @@
           "with_counters" : false,
           "support_timeout" : false,
           "direct_meters" : null,
-          "action_ids" : [5],
-          "actions" : ["MyIngress.drop"],
+          "action_ids" : [32],
+          "actions" : ["ingress369"],
           "base_default_next" : null,
           "next_tables" : {
-            "MyIngress.drop" : null
+            "ingress369" : null
           },
           "default_entry" : {
-            "action_id" : 5,
+            "action_id" : 32,
             "action_const" : true,
             "action_data" : [],
             "action_entry_const" : true
@@ -11552,14 +11515,14 @@
           "with_counters" : false,
           "support_timeout" : false,
           "direct_meters" : null,
-          "action_ids" : [8],
+          "action_ids" : [7],
           "actions" : ["MyIngress.set_rec_tstp_for_port"],
           "base_default_next" : "tbl_ingress375",
           "next_tables" : {
             "MyIngress.set_rec_tstp_for_port" : "tbl_ingress375"
           },
           "default_entry" : {
-            "action_id" : 8,
+            "action_id" : 7,
             "action_const" : true,
             "action_data" : [],
             "action_entry_const" : true
@@ -11668,14 +11631,14 @@
           "with_counters" : false,
           "support_timeout" : false,
           "direct_meters" : null,
-          "action_ids" : [25],
+          "action_ids" : [24],
           "actions" : ["MyIngress.set_meta_ports"],
           "base_default_next" : "node_32",
           "next_tables" : {
             "MyIngress.set_meta_ports" : "node_32"
           },
           "default_entry" : {
-            "action_id" : 25,
+            "action_id" : 24,
             "action_const" : true,
             "action_data" : [],
             "action_entry_const" : true
@@ -11733,7 +11696,7 @@
           "with_counters" : false,
           "support_timeout" : false,
           "direct_meters" : null,
-          "action_ids" : [23, 1],
+          "action_ids" : [22, 1],
           "actions" : ["MyIngress.set_waypoint", "NoAction"],
           "base_default_next" : "tbl_ingress419",
           "next_tables" : {
@@ -11850,14 +11813,14 @@
           "with_counters" : false,
           "support_timeout" : false,
           "direct_meters" : null,
-          "action_ids" : [26],
+          "action_ids" : [25],
           "actions" : ["MyIngress.construct_rexford_headers"],
           "base_default_next" : "node_42",
           "next_tables" : {
             "MyIngress.construct_rexford_headers" : "node_42"
           },
           "default_entry" : {
-            "action_id" : 26,
+            "action_id" : 25,
             "action_const" : true,
             "action_data" : [],
             "action_entry_const" : true
@@ -11937,14 +11900,14 @@
           "with_counters" : false,
           "support_timeout" : false,
           "direct_meters" : null,
-          "action_ids" : [15],
+          "action_ids" : [14],
           "actions" : ["MyIngress.read_tcp_flowlet_registers"],
           "base_default_next" : "node_48",
           "next_tables" : {
             "MyIngress.read_tcp_flowlet_registers" : "node_48"
           },
           "default_entry" : {
-            "action_id" : 15,
+            "action_id" : 14,
             "action_const" : true,
             "action_data" : [],
             "action_entry_const" : true
@@ -11966,14 +11929,14 @@
           "with_counters" : false,
           "support_timeout" : false,
           "direct_meters" : null,
-          "action_ids" : [17],
+          "action_ids" : [16],
           "actions" : ["MyIngress.update_tcp_flowlet_id"],
           "base_default_next" : "node_50",
           "next_tables" : {
             "MyIngress.update_tcp_flowlet_id" : "node_50"
           },
           "default_entry" : {
-            "action_id" : 17,
+            "action_id" : 16,
             "action_const" : true,
             "action_data" : [],
             "action_entry_const" : true
@@ -12024,14 +11987,14 @@
           "with_counters" : false,
           "support_timeout" : false,
           "direct_meters" : null,
-          "action_ids" : [16],
+          "action_ids" : [15],
           "actions" : ["MyIngress.update_udp_flowlet_id"],
           "base_default_next" : "MyIngress.ipv4_forward",
           "next_tables" : {
             "MyIngress.update_udp_flowlet_id" : "MyIngress.ipv4_forward"
           },
           "default_entry" : {
-            "action_id" : 16,
+            "action_id" : 15,
             "action_const" : true,
             "action_data" : [],
             "action_entry_const" : true
@@ -12060,7 +12023,7 @@
           "with_counters" : false,
           "support_timeout" : false,
           "direct_meters" : null,
-          "action_ids" : [19, 21, 22, 4],
+          "action_ids" : [18, 20, 21, 4],
           "actions" : ["MyIngress.set_nhop", "MyIngress.set_nhop_and_lfa", "MyIngress.escmp_group", "MyIngress.drop"],
           "base_default_next" : "MyIngress.final_forward",
           "next_tables" : {
@@ -12105,7 +12068,7 @@
           "with_counters" : false,
           "support_timeout" : false,
           "direct_meters" : null,
-          "action_ids" : [3, 18, 20, 0],
+          "action_ids" : [3, 17, 19, 0],
           "actions" : ["MyIngress.drop", "MyIngress.set_nhop", "MyIngress.set_nhop_and_lfa", "NoAction"],
           "base_default_next" : "MyIngress.final_forward",
           "next_tables" : {
@@ -12144,7 +12107,7 @@
           "with_counters" : false,
           "support_timeout" : false,
           "direct_meters" : null,
-          "action_ids" : [24, 2],
+          "action_ids" : [23, 2],
           "actions" : ["MyIngress.set_nexthop_lfa_rlfa", "NoAction"],
           "base_default_next" : "tbl_ingress479",
           "next_tables" : {
@@ -12290,14 +12253,14 @@
           "with_counters" : false,
           "support_timeout" : false,
           "direct_meters" : null,
-          "action_ids" : [27],
+          "action_ids" : [26],
           "actions" : ["MyIngress.drop_based_on_queue_length_and_traffic_class"],
           "base_default_next" : "node_65",
           "next_tables" : {
             "MyIngress.drop_based_on_queue_length_and_traffic_class" : "node_65"
           },
           "default_entry" : {
-            "action_id" : 27,
+            "action_id" : 26,
             "action_const" : true,
             "action_data" : [],
             "action_entry_const" : true
@@ -12348,14 +12311,14 @@
           "with_counters" : false,
           "support_timeout" : false,
           "direct_meters" : null,
-          "action_ids" : [11],
+          "action_ids" : [10],
           "actions" : ["MyIngress.set_sent_tstp_for_port"],
           "base_default_next" : null,
           "next_tables" : {
             "MyIngress.set_sent_tstp_for_port" : null
           },
           "default_entry" : {
-            "action_id" : 11,
+            "action_id" : 10,
             "action_const" : true,
             "action_data" : [],
             "action_entry_const" : true
@@ -12420,7 +12383,7 @@
             "filename" : "/home/p4/p4-tools/13_rexford/p4src/ingress.p4",
             "line" : 335,
             "column" : 20,
-            "source_fragment" : "meta.timestamp != 0 && (std_meta.ingress_global_timestamp - meta.timestamp > 48w360000)"
+            "source_fragment" : "meta.timestamp != 0 && (std_meta.ingress_global_timestamp - meta.timestamp > 48w1000000)"
           },
           "expression" : {
             "type" : "expression",
@@ -12470,7 +12433,7 @@
                   },
                   "right" : {
                     "type" : "hexstr",
-                    "value" : "0x000000057e40"
+                    "value" : "0x0000000f4240"
                   }
                 }
               }
@@ -12486,7 +12449,7 @@
             "filename" : "/home/p4/p4-tools/13_rexford/p4src/ingress.p4",
             "line" : 346,
             "column" : 20,
-            "source_fragment" : "std_meta.ingress_global_timestamp - meta.timestamp > 48w120000"
+            "source_fragment" : "std_meta.ingress_global_timestamp - meta.timestamp > 48w900000"
           },
           "expression" : {
             "type" : "expression",
@@ -12518,7 +12481,7 @@
               },
               "right" : {
                 "type" : "hexstr",
-                "value" : "0x00000001d4c0"
+                "value" : "0x0000000dbba0"
               }
             }
           },
@@ -12572,7 +12535,7 @@
             }
           },
           "false_next" : null,
-          "true_next" : "tbl_drop"
+          "true_next" : "tbl_ingress369"
         },
         {
           "name" : "node_23",
@@ -13277,11 +13240,11 @@
           }
         },
         {
-          "name" : "tbl_egress75",
+          "name" : "tbl_egress76",
           "id" : 43,
           "source_info" : {
             "filename" : "/home/p4/p4-tools/13_rexford/p4src/egress.p4",
-            "line" : 75,
+            "line" : 76,
             "column" : 12,
             "source_fragment" : "port_bytes_out.count((bit<32>) std_meta.egress_port)"
           },
@@ -13293,10 +13256,10 @@
           "support_timeout" : false,
           "direct_meters" : null,
           "action_ids" : [52],
-          "actions" : ["egress75"],
+          "actions" : ["egress76"],
           "base_default_next" : null,
           "next_tables" : {
-            "egress75" : null
+            "egress76" : null
           },
           "default_entry" : {
             "action_id" : 52,
@@ -13329,7 +13292,7 @@
             }
           },
           "true_next" : "node_72",
-          "false_next" : "tbl_egress75"
+          "false_next" : "tbl_egress76"
         },
         {
           "name" : "node_72",
