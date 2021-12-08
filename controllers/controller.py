@@ -152,6 +152,10 @@ class Controller(object):
                 nexthopports = [ 
                     str(self.topo.node_to_node_port_num(p4switch, nexthop)) 
                         for nexthop in routs["nexthops"]]
+                scmp_nexthopports = [ 
+                    str(self.topo.node_to_node_port_num(p4switch, nexthop)) 
+                        for nexthop in routs["scmps"]]
+                nexthop_escmp_ports = nexthopports + [p for p in scmp_nexthopports if p not in nexthopports]
 
                 lfa = routs["lfa"]
                 lfa_port = None
@@ -159,20 +163,20 @@ class Controller(object):
                     lfa_port = str(self.topo.node_to_node_port_num(p4switch, lfa))                 
                 
                 print("Adding nexthops and lfa:")
-                print([nexthopports, lfa_port])
+                print([scmp_nexthopports, lfa_port])
             
-                if len(nexthopports) == 1:
+                if len(scmp_nexthopports) == 1:
                     add_set_next_hop("ipv4_forward", 
                             match_keys=[host_addr], 
-                            next_port=nexthopports[0], 
+                            next_port=scmp_nexthopports[0], 
                             lfa_port=lfa_port)
                 else:
                     self.controllers[p4switch].table_add(
                             "ipv4_forward", 
                             action_name="escmp_group", 
-                            match_keys=[host_addr], action_params=[str(ecmp_group_id), str(len(nexthopports)), str(len(nexthopports))])
+                            match_keys=[host_addr], action_params=[str(ecmp_group_id), str(len(nexthopports)), str(len(nexthop_escmp_ports))])
                     port_hash = 0
-                    for nextport in nexthopports:
+                    for nextport in nexthop_escmp_ports:
                         # Why are we setting lfa if ecmp?
                         add_set_next_hop("escmp_group_to_nhop", 
                             match_keys=[str(ecmp_group_id), str(port_hash)], 
