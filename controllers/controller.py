@@ -258,7 +258,7 @@ class Controller(object):
                     print(f"Got routing table and rlfas. Loading...")
                     while True:
                         try:
-                            self.load_routing_table(routing_tables, Rlfas)
+                            #self.load_routing_table(routing_tables, Rlfas)
                             break
                         except:
                             time.sleep(0.0001)
@@ -271,7 +271,7 @@ class Controller(object):
                     print(f"Got routing table and rlfas. Loading...")
                     while True:
                         try:
-                            self.load_routing_table(routing_tables, Rlfas)
+                            #self.load_routing_table(routing_tables, Rlfas)
                             break
                         except:
                             time.sleep(0.0001)
