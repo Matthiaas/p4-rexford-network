@@ -1,14 +1,18 @@
 import argparse
 from p4utils.utils.helper import load_topo
 from p4utils.utils.sswitch_thrift_API import SimpleSwitchThriftAPI
+from multiprocessing.pool import ThreadPool
 from recovery import Fast_Recovery_Manager as FRM
 from heartbeat import HeartBeatGenerator as HBG
-from queulengthestimator import QueueLengthEstimator as QLE
+from queulengthestimator import QueueLengthEstimator 
+from routingtablemanager import RoutingTableManager
+from rexfordutils import RexfordUtils
 import json
 from scapy.all import *
 import pathlib
 import sys
 import os
+import time
 import way_point_reader as wpr
 from errors import *
 
@@ -22,7 +26,6 @@ class Controller(object):
         self.base_traffic_file = base_traffic
         self.topo = load_topo('topology.json')
         self.controllers = {}
-        self.rexford_addr_lookup = {}
         self.failed_links = set() #current set of failed links
         path = sys.argv[0]
         self.base_path  = "/".join(path.split("/")[:-1])
@@ -31,7 +34,11 @@ class Controller(object):
         # Settings:
         self.settings = self.read_settings(self.base_path + "/configs/settings.json")
         self.hb_manager = HBG(self.settings["heartbeat_freq"], self.topo)
-        self.qle = QLE(self.settings["queue_len_estimator_sample_freq"], self.controllers)
+        self.qle = QueueLengthEstimator(self.settings["queue_len_estimator_sample_freq"], 
+                self.controllers)
+        self.rt_manager = RoutingTableManager(self.settings["rt_manager_freq"],
+                self.controllers, self.topo, self.recovery_manager)
+        self.workers = ThreadPool(16) # One worker for each thread
         self.init()
 
 
@@ -58,29 +65,6 @@ class Controller(object):
         return str(host_port), host_mac
 
 
-    def get_switch_of_host(self, host_name):
-        return host_name.split("_")[0]
-
-
-    def get_host_of_switch(self, sw_name):
-        return sw_name+"_h0"
-
-
-    def get_rexford_addr(self, host_name):
-        switch_name = self.get_switch_of_host(host_name)
-        ipstr = self.topo.node_to_node_interface_ip(host_name, switch_name)
-        # Ipaddress has format: 10.0.rexfordAddr.1/24
-        # They enumerate from 1 to 16. 
-        # Since our address is 4 bit "16" should be mapped to "0".
-        addr = ipstr.split(".")[2]
-        if addr == "16":
-            # TODO: This is an awfull hack. We should either use tables or use 5 bit as adresses or so.
-            # See switch.p4
-            addr = "0"
-        self.rexford_addr_lookup[int(addr)] = host_name
-        return addr
-
-
     def configure_host_port(self, p4switch):
         host_port, host_mac = self.get_port_and_mac_of_host(p4switch)
         cont = self.controllers[p4switch]
@@ -93,7 +77,7 @@ class Controller(object):
 
     def configure_host_address(self, p4switch):
         host_name = p4switch + "_h0"
-        host_addr = self.get_rexford_addr(host_name)
+        host_addr = RexfordUtils.get_rexford_addr(self.topo, host_name)
         cont = self.controllers[p4switch]
         cont.register_write("host_address_reg", 0, int(host_addr))
 
@@ -101,122 +85,15 @@ class Controller(object):
     def setup_way_points(self, way_point_file_name):
         wps = wpr.get_way_points(way_point_file_name)
         for src, dst, wp in wps:
-            src_switch = self.get_switch_of_host(src)
-            dst_addr = self.get_rexford_addr(dst)
-            wp_addr = self.get_rexford_addr(wp + "_h0")
+            src_switch = RexfordUtils.get_switch_of_host(src)
+            dst_addr = RexfordUtils.get_rexford_addr(self.topo, dst)
+            wp_addr = RexfordUtils.get_rexford_addr(self.topo, wp + "_h0")
             print("Waypoint")
             print(str(dst_addr))
             print(str(wp_addr))
             self.controllers[src_switch].table_add(
                 "udp_waypoint", action_name="set_waypoint", 
                 match_keys=[dst_addr], action_params=[wp_addr])
-    
-
-    def load_routing_table(self, routing_tables, Rlfas, init=True):
-        """
-            Loads routing tables, including Rlfas, into switch. Additionally init is used if
-            tables have to be created from scratch or rather modified.
-        """
-        ###########
-        #         #
-        # HELPERS #
-        #         #
-        ###########
-
-        def modifiy_or_add(cont, table_name, action_name, match_keys, action_params=[]):
-            entry_handle = None
-            if not init:
-                # No need to try to update the entry when we init.
-                entry_handle = cont.get_handle_from_match(table_name, match_keys)
-            if entry_handle is not None:
-                cont.table_modify(table_name, action_name, entry_handle, action_params)
-            else:
-                cont.table_add(table_name, action_name, match_keys, action_params)
-
-        # maps refxord addr or ecmp group to nexthop port and lfa if possible
-        def add_set_next_hop(table_name, match_keys, next_port, lfa_port=None, init=True):
-            if lfa_port:
-                modifiy_or_add(cont=self.controllers[p4switch],
-                    table_name=table_name, action_name="set_nhop_and_lfa", 
-                        match_keys=match_keys, action_params=[next_port, lfa_port])
-            else:
-                modifiy_or_add(cont=self.controllers[p4switch],
-                    table_name=table_name, action_name="set_nhop", 
-                        match_keys=match_keys, action_params=[next_port])
-
-
-
-        def clear_tables(controller, table_names):
-            for table_name in table_names:
-                controller.table_clear(table_name)
-        
-        ############
-        #          #
-        #   CODE   #
-        #          #
-        ############
-        for p4switch in self.topo.get_p4switches():
-            #reset default state of tables
-            #clear_tables(self.controllers[p4switch], TABLES)
-            
-            rt = routing_tables[p4switch]
-            ecmp_group_id = 0
-            for host_name, routs in rt.items():
-                host_addr = self.get_rexford_addr(host_name)               
-                nexthopports = [ 
-                    str(self.topo.node_to_node_port_num(p4switch, nexthop)) 
-                        for nexthop in routs["nexthops"]]
-
-                lfa = routs["lfa"]
-                lfa_port = None
-                if lfa != "":
-                    lfa_port = str(self.topo.node_to_node_port_num(p4switch, lfa))                 
-                
-                print("Adding nexthops and lfa:")
-                print([nexthopports, lfa_port])
-            
-                if len([host_addr]) == 1:
-                    # We only need to set the nexthop and not any ESCP stuff.
-                    add_set_next_hop("ipv4_forward", 
-                            match_keys=[host_addr], 
-                            next_port=nexthopports[0], 
-                            lfa_port=lfa_port, init=init)
-                else:
-                    modifiy_or_add(cont=self.controllers[p4switch],
-                            table_name="ipv4_forward", 
-                            action_name="escmp_group", 
-                            match_keys=[host_addr],
-                            action_params=[str(ecmp_group_id), str(len(nexthopports)), str(len(nexthopports))])
-                    port_hash = 0
-                    for nextport in nexthopports:
-                        # Why are we setting lfa if ecmp?
-                        add_set_next_hop("escmp_group_to_nhop", 
-                            match_keys=[str(ecmp_group_id), str(port_hash)], 
-                            next_port=nextport, 
-                            lfa_port=lfa_port,
-                            init=init)
-                        port_hash = port_hash + 1 
-                    ecmp_group_id = ecmp_group_id + 1
-                
-            #set Rlfas
-            for neigh, rlfa in Rlfas[p4switch].items():
-                if rlfa != "":
-                    link_port = self.topo.node_to_node_port_num(p4switch, neigh)
-                    #get nexthop for getting to the rlfa
-                    rlfa_host = self.get_rexford_addr(self.get_host_of_switch(rlfa))
-                    rlfa_host_nexthops = rt[self.get_host_of_switch(rlfa)]["nexthops"]
-                    rlfa_port = 0
-                    for nh in rlfa_host_nexthops:
-                        #clearly has to be different than the neigh for which the link fails
-                        if nh != neigh:
-                            rlfa_port = self.topo.node_to_node_port_num(p4switch, nh)
-                    print(f"Adding Rlfa link {p4switch}--{neigh} rlfa: {rlfa} port: {rlfa_port}")
-                    modifiy_or_add(cont=self.controllers[p4switch],
-                            table_name="final_forward",
-                            action_name="set_nexthop_lfa_rlfa",
-                            match_keys=[str(link_port)],
-                            action_params=[rlfa_host, str(rlfa_port)])
-
                 
     def setup_meters(self):
         commited_queue_length = self.settings["commited_queue_length"]
@@ -277,7 +154,6 @@ class Controller(object):
 
     def process_packet(self, pkt):
         """Processes received packets to detect failure notifications"""
-
         interface = pkt.sniffed_on
         switch_name = interface.split("-")[0]
         pkt_raw = raw(pkt)
@@ -291,24 +167,11 @@ class Controller(object):
             failed_link = tuple(sorted([switch_name, neighbor]))
             #print(f"[!] Heartbeat: {switch_name} {neighbor} {port}")
             if failed == 1:
-                # get other side of the link using port
-                # detect the failed link
-                # if it is not a duplicated notification
                 print("Notification for link failure {} received", format(failed_link))
-                if failed_link not in self.failed_links and failed_link in FRM.get_non_bridges(self.topo):
-                    self.failed_links.add(failed_link)
-                    routing_tables, Rlfas = self.recovery_manager.query_routing_state(self.failed_links)
-                    print(f"Got routing table and rlfas. Loading...")
-                    self.load_routing_table(routing_tables, Rlfas, False)
+                self.rt_manager.fail_link(failed_link)
             if recovered == 1:
                 print("Notification for link restored {} received", format(failed_link))
-                if failed_link in self.failed_links:
-                    self.failed_links.remove(failed_link)
-                    routing_tables, Rlfas = self.recovery_manager.query_routing_state(self.failed_links)
-                    print(f"Got routing table and rlfas. Loading...")
-                    self.load_routing_table(routing_tables, Rlfas, False)
-                #else:
-                #    raise FailureNotFound()
+                self.rt_manager.restore_link(failed_link)
 
 
     def run_cpu_port_loop(self):
@@ -324,9 +187,8 @@ class Controller(object):
             self.configure_host_port(p4switch)
             self.configure_host_address(p4switch)
         self.setup_way_points(self.base_path + "/configs/full.slas")
-        routing_tables, Rlfas = self.recovery_manager.query_routing_state()
-        self.load_routing_table(routing_tables, Rlfas)
         self.setup_meters()
+        self.rt_manager.run()
 
         # Configure mirroring session to cpu port for failure notifications
         self.set_mirroring_sessions()
