@@ -20,6 +20,7 @@ class RoutingTableManager(object):
         self.failed_links = set()
         self.failures_of_current_rt = set()
         self.lock = threading.Lock()
+        self.t = None
        
     def fail_link(self, failed_link):
         self.lock.acquire()
@@ -37,19 +38,16 @@ class RoutingTableManager(object):
 
     def __check_changed(self):
         while True:
+            print("Investigating changes.")
             self.lock.acquire()
             if self.has_changed:
+                print("Change found. Getting routing tables for failure: ", self.failed_links)
                 self.has_changed = False
-                recompute = False
-                if self.failures_of_current_rt != self.failed_links:
-                    self.failures_of_current_rt = frozenset(self.failed_links)
-                    routing_tables, Rlfas = self.recovery_manager.query_routing_state(self.failed_links)
-                    recompute = True
+                routing_tables, Rlfas = self.recovery_manager.query_routing_state(self.failed_links)
                 self.lock.release()
-                if recompute:
-                    print(f"Got routing table and rlfas. Loading...")
-                    self.update_all_routing_tables(routing_tables, Rlfas, False)
-                    print(f"Loading completed.")
+                print(f"Got routing table and rlfas. Loading...")
+                self.update_all_routing_tables(routing_tables, Rlfas, False)
+                print(f"Loading completed.")
             else:
                 self.lock.release()
                 time.sleep(self.time_interval)
@@ -147,6 +145,6 @@ class RoutingTableManager(object):
         # Load default table.
         routing_tables, Rlfas = self.recovery_manager.query_routing_state()
         self.update_all_routing_tables(routing_tables, Rlfas, False)
-        t = threading.Thread(target=self.__check_changed, args=(), daemon=True)
-        t.start()
+        self.t = threading.Thread(target=self.__check_changed, args=(), daemon=True)
+        self.t.start()
         print("rtmanager sterted.")
