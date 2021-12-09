@@ -119,9 +119,7 @@ class RoutingTableManager(object):
                             action_params=[rlfa_host, str(rlfa_port)])
             print("Loaded routing tables for ", p4switch)
                            
-        for a in self.topo.get_p4switches():
-            update_singel_routing_table(a)
-        #self.workers.map(update_singel_routing_table, self.topo.get_p4switches())
+        self.workers.map(update_singel_routing_table, self.topo.get_p4switches())
 
     def __modifiy_or_add(self, cont, table_name, action_name, match_keys, action_params=[], init=False):
             entry_handle = None
