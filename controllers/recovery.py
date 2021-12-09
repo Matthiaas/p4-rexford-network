@@ -11,6 +11,21 @@ import sys
 
 from errors import *
 from typing import List, Set, Tuple, Dict
+from itertools import chain, combinations
+
+def powerset(iterable):
+    s = list(iterable)
+    return chain.from_iterable(combinations(s, r) for r in range(len(s)+1))
+
+def read_settings():
+    path = sys.argv[0]
+    base_path  = "/".join(path.split("/")[:-1])
+    if base_path == "":
+        base_path = "."
+    with open(base_path + "/configs/settings.json", "r") as f:
+        return json.load(f)
+
+SETTINGS = read_settings()
 
 
 class Fast_Recovery_Manager(object):
@@ -61,8 +76,23 @@ class Fast_Recovery_Manager(object):
 
     @staticmethod
     def generate_possible_failures(g: Graph, failures_opath: str):
-        possible_failures_str = Fast_Recovery_Manager.__generate_possible_failures_helper(g.copy(), set(), [])
-        possible_failures = [x.split(",") for x in possible_failures_str]
+        default_edges = [("LON", "MAN"), ("LON", "GLO"), ("LON", "BRI"), ("AMS", "LON"), ("FRA", "LON"), ("PAR", "LON"), ("MAD", "LON"), ("LIS", "LON"), ("GLO", "BRI"), ("PAR", "AMS"), ("AMS", "EIN"), ("FRA", "AMS"), ("FRA", "BER"), ("FRA", "MUN"), ("FRA", "PAR"), ("BER", "MUN"), ("PAR", "LIL"), ("PAR", "REN"), ("PAR", "BAR"), ("BAR", "MAD"), ("MAD", "POR"), ("LIS", "POR")]
+        host_edges = [(x, x + "_h0") for x in["MAN", "GLO", "BRI", "LON", "AMS", "EIN", "BER", "FRA", "MUN", "LIL", "PAR", "REN", "BAR", "MAD", "POR", "LIS"]]
+
+        nw = g.copy()
+        nw.remove_edges_from(host_edges)
+        additional_edges = [e for e in nw.edges if e not in default_edges and (e[1], e[0]) not in default_edges]
+        nw.remove_edges_from(additional_edges)
+
+        possible_failures_str = Fast_Recovery_Manager.__generate_possible_failures_helper(nw, set(), [])
+        possible_failures_tmp = [x.split(",") for x in possible_failures_str]
+
+        possible_failures = []
+        for x in possible_failures_tmp:
+            for ae in powerset(additional_edges):
+                edges = [Fast_Recovery_Manager.edge_to_string(e) for e in ae]
+                possible_failures.append(edges + x)
+
         with open(failures_opath, "w") as f:
             json.dump({"failures": possible_failures}, f)
 
@@ -193,7 +223,7 @@ class Fast_Recovery_Manager(object):
         """
         Compute per-destination LFA  for all nexthops.
         
-        Returns lfas = dict{str: dict{str: str}} -> dict{Switch: dict{dest: LFA}}
+        Returns lfas = dict{str: dict{str: list[str]}} -> dict{Switch: dict{dest: sorted list of LFAs}}
         """
         lfas = {}
         # for every switch...
@@ -224,7 +254,9 @@ class Fast_Recovery_Manager(object):
                 if not loop_free:
                     continue
                 # LFA with shortest distance
-                lfas[sw][host] = min(loop_free, key=lambda x: x[1])[0]
+                # lfas[sw][host] = min(loop_free, key=lambda x: x[1])[0]
+                loop_free.sort(key=lambda x: x[1])
+                lfas[sw][host] = [e[0] for e in loop_free[:4]]
 
         return lfas
 
@@ -282,7 +314,7 @@ class Fast_Recovery_Manager(object):
                     Rlfas[sw][neigh] = PQ[0]
                 else:
                     Rlfas[sw][neigh] = ""
-        print("Rlfas:\n",Rlfas)
+        #print("Rlfas:\n",Rlfas)
         return Rlfas
 
     @staticmethod
@@ -296,6 +328,62 @@ class Fast_Recovery_Manager(object):
         return all_failures
     
     @staticmethod
+    def distance_to_rtt(distance):
+        """Returns rtt in ms given a distance
+
+        All based in the following:
+        https://hpbn.co/primer-on-latency-and-bandwidth/
+        https://wondernetwork.com/pings
+
+        Each 250km 5ms RTT. This has been verfied with real pings and distance
+        measurements. 
+
+        For this we divide the distance by 250km and round to the closest value.
+
+        Less or equal to 250km -> 5ms
+        500km  -> 10ms
+        750km  -> 15ms
+        1000km -> 20ms
+        1250km -> 25ms
+        1500km -> 30ms
+        1750km -> 35ms
+        2000km -> 40ms
+        2000km+ -> 50ms
+        """
+
+        # compute times 250
+        if distance == 250 or distance < 250:
+            return 5
+        elif distance > 2000:
+            return 50
+        else:
+            _times_250 = round(distance/250)
+            #_times_250 = math.ceil(distance/250)
+            return _times_250 * 5  # 5ms per 250km
+
+    @staticmethod
+    def compute_scmps(lfas: Dict[str, Dict[str, List[str]]], distances: Dict[str, Dict[str, int]], threshold: int = 5) -> Dict[str, Dict[str, List[str]]]:
+        """
+        Find which LFAs can be used as SCMP paths.
+
+        Args:
+            lfas: Already computed lfas for all the switches (dict[switch, dict[destination, port]])
+            distances: shortest path distances between all nodes (dict[src, dict[dest, distance]])
+            threshold: Threshold of added delay by using LFA over shortest path (at this hop) in ms
+        Returns:
+            SCMP next hops for src and destination. 
+        """
+        scmps: Dict[str, Dict[str, str]]= {}
+        for src, dests in lfas.items():
+            scmps[src] = {}
+            for dst, lfas in dests.items():
+                shortest_path_length = distances[src][dst]
+                scmps[src][dst] = [lfa for lfa in lfas if (Fast_Recovery_Manager.distance_to_rtt(distances[src][lfa] + distances[lfa][dst] - shortest_path_length) / 2) < threshold]
+        return scmps
+
+
+
+    @staticmethod
     def __form_routing(graph, switches, hosts, failures=None):
         """
             Forms the routing state for the current failure scenario
@@ -306,6 +394,7 @@ class Fast_Recovery_Manager(object):
         distances, shortest_paths = Fast_Recovery_Manager.dijkstra(graph, failures)
         nexthops = Fast_Recovery_Manager.compute_nexthops(shortest_paths, switches, hosts, failures)
         lfas = Fast_Recovery_Manager.compute_lfas(graph, switches, hosts, distances, nexthops, failures)
+        sim_cost_paths = Fast_Recovery_Manager.compute_scmps(lfas, distances, SETTINGS["scmp_threshold"])
         Rlfas = Fast_Recovery_Manager.compute_Rlfas(graph, switches, failures)
         
         routing_tbl = {}
@@ -313,11 +402,13 @@ class Fast_Recovery_Manager(object):
             routing_tbl[sw] = {}
             for host, this_nexthops in nexthops[sw]:
                 try:
-                    lfa = lfas[sw][host]
+                    lfa = lfas[sw][host][0]
+                    scmp = sim_cost_paths[sw][host]
                 except:
                     #no lfa
                     lfa = ""
-                routing_tbl[sw][host] = {"nexthops":this_nexthops, "lfa":lfa}
+                    scmp = []
+                routing_tbl[sw][host] = {"nexthops":this_nexthops, "lfa":lfa, "scmps": scmp}
         scenario = {"failures": [Fast_Recovery_Manager.edge_to_string(x) for x in failures],\
                             "routing_tbl": routing_tbl,\
                             "Rlfas": Rlfas}
@@ -370,13 +461,14 @@ def main(argv, argc):
     graph = load_topo("../topology.json")
     failure_path = "./configs/failures_generated.json"
     # done
-    #Fast_Recovery_Manager.generate_possible_failures(graph, failure_path)
+    # Fast_Recovery_Manager.generate_possible_failures(graph, failure_path)
     print("[*] Failures computed, computing routing scenarios...")
     if no_failures:
         all_failures = [[]]
     else:
         all_failures = Fast_Recovery_Manager.load_failures(failure_path)
     Fast_Recovery_Manager.precompute_routing(graph, graph.get_p4switches().keys(), graph.get_hosts().keys(), all_failures)
+
 
 
 # recovery = Fast_Recovery_Manager('example_link_failure_map.json')

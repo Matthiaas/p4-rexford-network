@@ -64,6 +64,11 @@ class RoutingTableManager(object):
                 nexthopports = [ 
                     str(self.topo.node_to_node_port_num(p4switch, nexthop)) 
                         for nexthop in routs["nexthops"]]
+                scmp_nexthopports = [
+                    str(self.topo.node_to_node_port_num(p4switch, nexthop))
+                        for nexthop in routs.get("scmps", [])]
+                nexthop_escmp_ports = nexthopports + [p for p in scmp_nexthopports if p not in nexthopports]
+
 
                 lfa = routs["lfa"]
                 lfa_port = None
@@ -71,22 +76,22 @@ class RoutingTableManager(object):
                     lfa_port = str(self.topo.node_to_node_port_num(p4switch, lfa))                 
                 
                 print("Adding nexthops and lfa:")
-                print([nexthopports, lfa_port])
+                print([nexthop_escmp_ports, lfa_port])
             
-                if len(nexthopports) == 1:
+                if len(nexthop_escmp_ports) == 1:
                     # We only need to set the nexthop and not any ESCP stuff.
                     self.__add_set_next_hop(cont, "ipv4_forward", 
                             match_keys=[host_addr], 
-                            next_port=nexthopports[0], 
+                            next_port=nexthop_escmp_ports[0], 
                             lfa_port=lfa_port, init=init)
                 else:
                     self.__modifiy_or_add(cont=cont,
                             table_name="ipv4_forward", 
                             action_name="escmp_group", 
                             match_keys=[host_addr],
-                            action_params=[str(ecmp_group_id), str(len(nexthopports)), str(len(nexthopports))])
+                            action_params=[str(ecmp_group_id), str(len(nexthopports)), str(len(nexthop_escmp_ports))])
                     port_hash = 0
-                    for nextport in nexthopports:
+                    for nextport in nexthop_escmp_ports:
                         # Why are we setting lfa if ecmp?
                         self.__add_set_next_hop(cont, "escmp_group_to_nhop", 
                             match_keys=[str(ecmp_group_id), str(port_hash)], 
@@ -147,4 +152,3 @@ class RoutingTableManager(object):
         self.update_all_routing_tables(routing_tables, Rlfas, False)
         self.t = threading.Thread(target=self.__check_changed, args=(), daemon=True)
         self.t.start()
-        print("rtmanager sterted.")
