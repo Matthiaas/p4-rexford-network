@@ -480,13 +480,22 @@ class Fast_Recovery_Manager(object):
     
 def main(argv, argc):
     no_failures = False
-    if argc > 1 and argv[1] == "nofailures":
+    generate_failures = False
+    args = argv[1:]
+    if "--no-failures" in args:
         no_failures = True
+    elif "--generate-failures" in args:
+        generate_failures = True
+    if "-h" in args:
+        print("Usage: python ./recovery.py [--no-failures] [--generate-failures]")
+        exit()
+
     print("[*] Generating Configurations...")
     graph = load_topo("../topology.json")
     failure_path = "./configs/failures_generated.json"
     # done
-    # Fast_Recovery_Manager.generate_possible_failures(graph, failure_path)
+    if generate_failures:
+        Fast_Recovery_Manager.generate_possible_failures(graph, failure_path)
     print("[*] Failures computed, computing routing scenarios...")
     if no_failures:
         all_failures = [[]]
