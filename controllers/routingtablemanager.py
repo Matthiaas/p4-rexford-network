@@ -68,7 +68,7 @@ class RoutingTableManager(object):
                         for nexthop in routs["nexthops"]]
                 scmp_nexthopports = [
                     str(self.topo.node_to_node_port_num(p4switch, nexthop))
-                        for nexthop in routs["scmps"]]
+                        for nexthop in routs.get("scmps", [])]
                 nexthop_escmp_ports = nexthopports + [p for p in scmp_nexthopports if p not in nexthopports]
 
 
