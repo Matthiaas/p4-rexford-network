@@ -6,6 +6,7 @@ from recovery import Fast_Recovery_Manager as FRM
 from heartbeat import HeartBeatGenerator as HBG
 from queulengthestimator import QueueLengthEstimator 
 from routingtablemanager import RoutingTableManager
+from digestmanager import DigestManager as DG
 from rexfordutils import RexfordUtils
 import json
 from scapy.all import *
@@ -38,7 +39,7 @@ class Controller(object):
                 self.controllers)
         self.rt_manager = RoutingTableManager(self.settings["rt_manager_freq"],
                 self.controllers, self.topo, self.recovery_manager)
-        self.workers = ThreadPool(16) # One worker for each thread
+        #self.workers = ThreadPool(16) # One worker for each thread
         self.init()
 
 
@@ -152,6 +153,7 @@ class Controller(object):
             cpu_port = self.topo.get_cpu_port_index(p4switch)
             self.controllers[p4switch].mirroring_add(100, cpu_port)
 
+
     def process_packet(self, pkt):
         """Processes received packets to detect failure notifications"""
         interface = pkt.sniffed_on
@@ -191,11 +193,20 @@ class Controller(object):
         self.rt_manager.run()
 
         # Configure mirroring session to cpu port for failure notifications
-        self.set_mirroring_sessions()
+        #self.set_mirroring_sessions()
         self.qle.run()
         #start heartbeat traffic
         self.hb_manager.run()
-        self.run_cpu_port_loop()
+        #self.run_cpu_port_loop()
+        switches = []
+        controllers = []
+        for entry in self.controllers.items():
+            switches.append(entry[0])
+            controllers.append(entry[1])
+        print("AAA",switches)
+        self.dg_manager = DG(self.topo, switches, controllers, self.rt_manager)
+        print("Starting DG manager")
+        self.dg_manager.run()
         time.sleep(1000000)
 
 

@@ -33,6 +33,11 @@ struct host_port_t {
     bit<9> port;
 }
 
+struct digest_t {
+    bit<8> port;
+    bit<8> failed;
+    bit<8> recovered;
+}
 // Instantiate metadata fields
 struct metadata {
     rexfordAddr_t next_destination;
@@ -45,6 +50,9 @@ struct metadata {
     bit<9> hb_port;
     bit<1> hb_failed_link; 
     bit<1> hb_recovered_link;
+
+    //for digest
+    digest_t digest;
 
     port_t srcPort;
     port_t dstPort;

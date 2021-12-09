@@ -373,12 +373,19 @@ control MyIngress(inout headers hdr,
                 get_rec_tstp_for_port(hdr.heartbeat.port);
                 if (meta.timestamp != 0 && (std_meta.ingress_global_timestamp - meta.timestamp > THRESHOLD_REC)){
                     //Update linkstate -> notify cont
-                    fail_linkState(hdr.heartbeat.port);
-                    meta.hb_port = hdr.heartbeat.port;
-                    meta.hb_failed_link = 1;
-                    meta.hb_recovered_link = 0;
-                    //host_address_reg.read(meta.hb_switch_addr, 0);
-                    clone3(CloneType.I2E, 100, meta); //this yields a compilation error due to a bug in their src code
+                    check_linkState(hdr.heartbeat.port);
+                    //if not already failed
+                    if (meta.linkState != 1){
+                        fail_linkState(hdr.heartbeat.port);
+                        //meta.hb_port = hdr.heartbeat.port;
+                        //meta.hb_failed_link = 1;
+                        //meta.hb_recovered_link = 0;
+                        //clone3(CloneType.I2E, 100, meta); //this yields a compilation error due to a bug in their src code
+                        meta.digest.port = (bit<8>)hdr.heartbeat.port;
+                        meta.digest.failed = (bit<8>)1;
+                        meta.digest.recovered = (bit<8>)0;
+                        digest<digest_t>(1, meta.digest);
+                    }
                 }
                 //check last time we sent something to this port
                 get_sent_tstp_for_port(hdr.heartbeat.port); 
@@ -396,11 +403,14 @@ control MyIngress(inout headers hdr,
                 check_linkState(std_meta.ingress_port);
                 if (meta.linkState == 1){
                     recover_linkState(std_meta.ingress_port);
-                    meta.hb_port = std_meta.ingress_port;
-                    meta.hb_failed_link = 0;
-                    meta.hb_recovered_link = 1;
-                    //host_address_reg.read(meta.hb_switch_addr, 0);
-                    clone3(CloneType.I2E, 100, meta);
+                    //meta.hb_port = std_meta.ingress_port;
+                    //meta.hb_failed_link = 0;
+                    //meta.hb_recovered_link = 1;
+                    //clone3(CloneType.I2E, 100, meta);
+                    meta.digest.port = (bit<8>)std_meta.ingress_port;
+                    meta.digest.failed = (bit<8>)0;
+                    meta.digest.recovered = (bit<8>)1;
+                    digest<digest_t>(1, meta.digest);
                 }
                 meta.drop_packet = true;
             }
@@ -410,7 +420,18 @@ control MyIngress(inout headers hdr,
         } else {
             //Normal traffic
             set_rec_tstp_for_port(std_meta.ingress_port);
-    
+            check_linkState(std_meta.ingress_port);
+            if (meta.linkState == 1){
+                recover_linkState(std_meta.ingress_port);
+                //meta.hb_port = std_meta.ingress_port;
+                //meta.hb_failed_link = 0;
+                //meta.hb_recovered_link = 1;
+                //clone3(CloneType.I2E, 100, meta);
+                meta.digest.port = (bit<8>)std_meta.ingress_port;
+                meta.digest.failed = (bit<8>)0;
+                meta.digest.recovered = (bit<8>)1;
+                digest<digest_t>(1, meta.digest);
+            }
             meta.drop_packet = false;
 
             // Read the address and port of the host.
