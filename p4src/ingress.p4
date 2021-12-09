@@ -368,6 +368,7 @@ control MyIngress(inout headers hdr,
     apply {
         if (hdr.heartbeat.isValid()){
             if (hdr.heartbeat.from_cp == 1){
+                update_queue_length_estimate_v2();
                 // From cont -> check last rec timestamp
                 get_rec_tstp_for_port(hdr.heartbeat.port);
                 if (meta.timestamp != 0 && (std_meta.ingress_global_timestamp - meta.timestamp > THRESHOLD_REC)){
