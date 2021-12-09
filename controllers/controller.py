@@ -175,7 +175,7 @@ class Controller(object):
                 print("Adding nexthops and lfa:")
                 print([nexthopports, lfa_port])
             
-                if len([host_addr]) == 1:
+                if len(nexthopports) == 1:
                     # We only need to set the nexthop and not any ESCP stuff.
                     add_set_next_hop("ipv4_forward", 
                             match_keys=[host_addr], 
