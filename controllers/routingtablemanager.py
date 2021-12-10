@@ -38,7 +38,7 @@ class RoutingTableManager(object):
 
     def __check_changed(self):
         while True:
-            print("Investigating changes.")
+            #print("Investigating changes...")
             self.lock.acquire()
             if self.has_changed:
                 print("Change found. Getting routing tables for failure: ", self.failed_links)

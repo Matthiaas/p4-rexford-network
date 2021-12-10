@@ -237,7 +237,7 @@ class Fast_Recovery_Manager(object):
                     # direct link to host
                     continue
 
-                # retain only candidates for alternative next hop, i.e remove current primary hop
+                # retain only candidates for alternative next hop, i.e remove current primary hops
                 alt_neighs = neighs - set(nexthops)
 
                 # try to find LFA
@@ -261,7 +261,7 @@ class Fast_Recovery_Manager(object):
         return lfas
 
     @staticmethod
-    def compute_Rlfas(graph: Graph, switches, failures=None):
+    def compute_Rlfas(graph: Graph, switches, nexthops, lfas, failures=None):
         """
         Implements the PQ algorithm for Remote LFAs
          
@@ -304,7 +304,33 @@ class Fast_Recovery_Manager(object):
                             break
                     if skips_protected:
                         Q.add(n)
-                PQ = list(P.intersection(Q))
+                PQ = P.intersection(Q)
+
+                #take a Rlfa that is not already an lfa:
+                #   - identify all the hosts sw reach via neigh
+                #   - get the lfas for all the hosts we reach via neigh
+                #   - filter PQ removing nodes that are already lfas
+                
+                #print(f"PQ for link {sw}-{neigh}: {PQ}")
+                
+                hosts = []
+                for host, this_nexthops in nexthops[sw]:
+                    if neigh in this_nexthops:
+                        hosts.append(host)
+                
+                #print(f"Hosts reachable from {sw} via {neigh}: {hosts}")
+
+                lfas_of_link = set()
+                for host in hosts:
+                    try:
+                        lfas_of_link.add(lfas[sw][host][0])
+                    except:
+                        continue
+                #print(f"all lfas for {sw}: {lfas[sw]}")
+                #print(f"lfas affected by link {sw}-{neigh}: {lfas_of_link}")
+                PQ = list(PQ - lfas_of_link)
+                #print(f"filtered PQ: {PQ}")
+
                 #take the alternative with shortest metric
                 if len(PQ) > 1:
                     distances = [shortest_path_length(graph, sw, n, weight='delay_w') for n in PQ]
@@ -382,7 +408,6 @@ class Fast_Recovery_Manager(object):
         return scmps
 
 
-
     @staticmethod
     def __form_routing(graph, switches, hosts, failures=None):
         """
@@ -395,7 +420,7 @@ class Fast_Recovery_Manager(object):
         nexthops = Fast_Recovery_Manager.compute_nexthops(shortest_paths, switches, hosts, failures)
         lfas = Fast_Recovery_Manager.compute_lfas(graph, switches, hosts, distances, nexthops, failures)
         sim_cost_paths = Fast_Recovery_Manager.compute_scmps(lfas, distances, SETTINGS["scmp_threshold"])
-        Rlfas = Fast_Recovery_Manager.compute_Rlfas(graph, switches, failures)
+        Rlfas = Fast_Recovery_Manager.compute_Rlfas(graph, switches, nexthops, lfas, failures)
         
         routing_tbl = {}
         for sw in switches:

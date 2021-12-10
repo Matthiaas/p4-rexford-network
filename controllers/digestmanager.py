@@ -7,6 +7,7 @@ from multiprocessing.pool import ThreadPool
 
 class DigestManager(object):
 
+
     def __init__(self, topo, switches, controllers, rt_manager):
         self.topo = topo
         self.switches = switches
@@ -21,8 +22,8 @@ class DigestManager(object):
         starting_index = 32
         fields_bytes = 3 #defined each field (they are 3) in digest_t as 8 bits
         for sample in range(num_samples):
-            print(f"Raw msg: {msg[starting_index:starting_index+fields_bytes]}")
-            port, failed, recovered = struct.unpack("!BBB", msg[starting_index:starting_index+fields_bytes])
+            raw_msg = msg[starting_index:starting_index+fields_bytes]
+            port, failed, recovered = struct.unpack("!BBB", raw_msg)
             print(f"Sample:: {port} f:{failed} r:{recovered}")
             starting_index += fields_bytes
             digest.append((port,failed,recovered))
@@ -32,7 +33,6 @@ class DigestManager(object):
     def __recv_msg_digest(self, msg, switch, controller):
         topic, device_id, ctx_id, list_id, buffer_id, num = struct.unpack("<iQiiQi",
                                                                           msg[:32])
-        print(f"Reading digest...")
         digest = self.__unpack_digest(msg, num)
         #ack
         controller.client.bm_learning_ack_buffer(ctx_id, list_id, buffer_id)
@@ -40,8 +40,9 @@ class DigestManager(object):
         failed_links = set()
         recovered_links = set()
         
-        print("Notification::", digest)
+        print("Message::", digest)
         
+        #process digests as a batch
         for notification in digest:
             port = notification[0]
             failed = notification[1]
@@ -56,7 +57,6 @@ class DigestManager(object):
             
             if recovered == 1:
                 print("Notification for link restored {} received", format(failed_link))
-                
                 if failed_link in failed_links:
                     failed_links.remove(failed_link)
                 else:
