@@ -10,9 +10,8 @@ from digestmanager import DigestManager as DG
 from rexfordutils import RexfordUtils
 import json
 from scapy.all import *
-import pathlib
+import threading
 import sys
-import os
 import time
 import way_point_reader as wpr
 from errors import *
@@ -159,15 +158,15 @@ class Controller(object):
         interface = pkt.sniffed_on
         switch_name = interface.split("-")[0]
         pkt_raw = raw(pkt)
-        pkt_bin = format(int.from_bytes(pkt, byteorder='big'), '0112b')
+        pkt_bin = format(int.from_bytes(pkt_raw, byteorder='big'), '0112b')
         eth_type = int(pkt_bin[-16:], 2)
-        if eth_type == 4660:
+        if eth_type == 4661:
             port = int(pkt_bin[0:9],2)
             failed = int(pkt_bin[10],2)
             recovered = int(pkt_bin[11],2)
             neighbor = self.topo.port_to_node(switch_name, port)
             failed_link = tuple(sorted([switch_name, neighbor]))
-            #print(f"[!] Heartbeat: {switch_name} {neighbor} {port}")
+            print(f"[!] Heartbeat: {switch_name} {neighbor} {port}")
             if failed == 1:
                 print("Notification for link failure {} received", format(failed_link))
                 self.rt_manager.fail_link(failed_link)
@@ -178,8 +177,9 @@ class Controller(object):
 
     def run_cpu_port_loop(self):
         """Sniffs traffic coming from switches"""
-        cpu_interfaces = [str(self.topo.get_cpu_port_intf(sw_name).replace("eth0", "eth1")) for sw_name in self.controllers]
-        sniff(iface=cpu_interfaces, prn=self.process_packet)
+        cpu_interfaces = [str(self.topo.get_ctl_cpu_intf(sw_name)).replace('eth1','eth0') for sw_name in self.controllers]
+        print(f"Sniffing interfaces: {cpu_interfaces}")
+        sniff(iface=cpu_interfaces, filter="ether proto 0x1235", prn=self.process_packet)
 
 
     def run(self):
@@ -192,28 +192,30 @@ class Controller(object):
         self.setup_meters()
         self.rt_manager.run()
 
-        # Configure mirroring session to cpu port for failure notifications
-        #self.set_mirroring_sessions()
         self.qle.run()
         #start heartbeat traffic
+
+        self.set_mirroring_sessions()
+        t = threading.Thread(target = self.run_cpu_port_loop, daemon=True)
+        t.start()
         self.hb_manager.run()
-        #self.run_cpu_port_loop()
-        switches = []
-        controllers = []
-        for entry in self.controllers.items():
-            switches.append(entry[0])
-            controllers.append(entry[1])
-        print("AAA",switches)
-        self.dg_manager = DG(self.topo, switches, controllers, self.rt_manager)
-        print("Starting DG manager")
-        self.dg_manager.run()
-        time.sleep(1000000)
+        # Configure mirroring session to cpu port for failure notifications
+        
+                
+        #switches = []
+        #controllers = []
+        #for entry in self.controllers.items():
+        #    switches.append(entry[0])
+        #    controllers.append(entry[1])
+        #self.dg_manager = DG(self.topo, switches, controllers, self.rt_manager)
+        #print("Starting DG manager")
+        #self.dg_manager.run()
+        time.sleep(10000000000)
 
 
     def main(self):
         """Main function"""
         self.run()
-
 
 
 def get_args():
@@ -223,6 +225,7 @@ def get_args():
     parser.add_argument('--slas', help='Path to scenario.slas',
     type=str, required=False, default='') 
     return parser.parse_args()
+
 
 if __name__ == "__main__":
     args = get_args()

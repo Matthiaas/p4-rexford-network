@@ -148,7 +148,8 @@ control MyEgress(inout headers hdr,
             hdr.heartbeat.failed_link = meta.hb_failed_link;
             hdr.heartbeat.recovered_link = meta.hb_recovered_link;
             hdr.heartbeat.port = meta.hb_port;
-            //hdr.heartbeat.switch_addr = meta.hb_switch_addr;
+            hdr.heartbeat.etherType = 0x1235;
+            log_msg("Heartbeat in Egress: port {} f {} r {} cloned {}",{hdr.heartbeat.port, hdr.heartbeat.failed_link, hdr.heartbeat.recovered_link, std_meta.instance_type});
             port_bytes_out.count((bit<32>) std_meta.egress_port);
         } else {
             port_bytes_out.count((bit<32>) std_meta.egress_port);

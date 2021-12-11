@@ -11,7 +11,7 @@
 #define MAX_PORTS 11 //max index is 10
 //#define THRESHOLD 48w1000000 // 1s
 //hb frequency from controller = 0.12s
-#define THRESHOLD_REC 48w300000 // 0.30s -> if we don't see traffic for more than > fail
+#define THRESHOLD_REC 48w600000 // 0.30s -> if we don't see traffic for more than > fail
 #define THRESHOLD_SENT 48w240000 // 0.24s -> if we haven't seen traffic for more than > send
 #define REGISTER_SIZE 8192
 #define FLOWLET_TIMEOUT 48w200000 // 0.2s
