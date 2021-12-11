@@ -380,6 +380,7 @@ control MyIngress(inout headers hdr,
                         meta.hb_port = hdr.heartbeat.port;
                         meta.hb_failed_link = 1;
                         meta.hb_recovered_link = 0;
+                        log_msg("HB Ingress: port {} f {} r {}",{meta.hb_port, meta.hb_failed_link, meta.hb_recovered_link});
                         clone3(CloneType.I2E, 100, meta); //this yields a compilation error due to a bug in their src code
                         //meta.digest.port = (bit<8>)hdr.heartbeat.port;
                         //meta.digest.failed = (bit<8>)1;
@@ -406,6 +407,7 @@ control MyIngress(inout headers hdr,
                     meta.hb_port = std_meta.ingress_port;
                     meta.hb_failed_link = 0;
                     meta.hb_recovered_link = 1;
+                    log_msg("HB Ingress: port {} f {} r {}",{meta.hb_port, meta.hb_failed_link, meta.hb_recovered_link});
                     clone3(CloneType.I2E, 100, meta);
                     //meta.digest.port = (bit<8>)std_meta.ingress_port;
                     //meta.digest.failed = (bit<8>)0;
