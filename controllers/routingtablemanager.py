@@ -21,11 +21,16 @@ class RoutingTableManager(object):
         self.failures_of_current_rt = set()
         self.lock = threading.Lock()
         self.t = None
+        self.non_bridges = FRM.get_non_bridges(self.topo)
        
     def fail_link(self, failed_link):
         self.lock.acquire()
-        if failed_link not in self.failed_links and failed_link in FRM.get_non_bridges(self.topo):
+        print(f"Checking failure validity for {failed_link}")
+        print(f"Not yet in failed_link? {failed_link not in self.failed_links}")
+        print(f"Is not a bridge? {failed_link in self.non_bridges}")
+        if failed_link not in self.failed_links and failed_link in self.non_bridges:
             self.failed_links.add(failed_link)
+            print(f"Updated failed links: {self.failed_links}")
             self.has_changed = True
         self.lock.release()
 
