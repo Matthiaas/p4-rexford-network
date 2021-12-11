@@ -1,7 +1,6 @@
 
 import time
 import threading
-from multiprocessing.pool import ThreadPool
 from recovery import Fast_Recovery_Manager as FRM
 from p4utils.utils.sswitch_thrift_API import SimpleSwitchThriftAPI
 from rexfordutils import RexfordUtils
@@ -15,7 +14,6 @@ class RoutingTableManager(object):
         self.controllers = controllers
         self.topo = topo 
         self.recovery_manager = recovery_manager
-        self.workers = ThreadPool(16) # One worker for each switch     
         self.has_changed = False 
         self.failed_links = set()
         self.failures_of_current_rt = set()
@@ -127,10 +125,11 @@ class RoutingTableManager(object):
                             action_params=[rlfa_host, str(rlfa_port)])
             print("Loaded routing tables for ", p4switch)
                            
-        self.workers.map(update_singel_routing_table, self.topo.get_p4switches())
+        map(update_singel_routing_table, self.topo.get_p4switches())
 
     def __modifiy_or_add(self, cont, table_name, action_name, match_keys, action_params=[], init=False):
             entry_handle = None
+            print("Begin working on ", cont , table_name)
             if not init:
                 # No need to try to update the entry when we init.
                 entry_handle = cont.get_handle_from_match(table_name, match_keys)
@@ -138,6 +137,7 @@ class RoutingTableManager(object):
                 cont.table_modify(table_name, action_name, entry_handle, action_params)
             else:
                 cont.table_add(table_name, action_name, match_keys, action_params)
+            print("End working on ", cont , table_name)
 
     # maps refxord addr or ecmp group to nexthop port and lfa if possible
     def __add_set_next_hop(self, cont, table_name, match_keys, next_port, lfa_port=None, init=False):
