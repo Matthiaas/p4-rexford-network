@@ -425,10 +425,11 @@ control MyIngress(inout headers hdr,
             check_linkState(std_meta.ingress_port);
             if (meta.linkState == 1){
                 recover_linkState(std_meta.ingress_port);
-                //meta.hb_port = std_meta.ingress_port;
-                //meta.hb_failed_link = 0;
-                //meta.hb_recovered_link = 1;
-                //clone3(CloneType.I2E, 100, meta);
+                log_msg("Recovered with normal traffic");
+                meta.hb_port = std_meta.ingress_port;
+                meta.hb_failed_link = 0;
+                meta.hb_recovered_link = 1;
+                clone3(CloneType.I2E, 100, meta);
                 //meta.digest.port = (bit<8>)std_meta.ingress_port;
                 //meta.digest.failed = (bit<8>)0;
                 //meta.digest.recovered = (bit<8>)1;
