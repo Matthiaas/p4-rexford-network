@@ -210,7 +210,7 @@ class Controller(object):
         #self.dg_manager = DG(self.topo, switches, controllers, self.rt_manager)
         #print("Starting DG manager")
         #self.dg_manager.run()
-        time.sleep(10000000000)
+        time.sleep(1000)
 
 
     def main(self):

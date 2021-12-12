@@ -34,10 +34,7 @@ class HeartBeatGenerator(object):
         return heartbeat
 
 
-    def __send_thread(self, args):
-        intf_name = args[0]
-        neighs_ports = args[1]
-        time_interval = args[2]
+    def __send_thread(self, intf_name, neighs_ports):
         """Periodically sends one packet to `intf_name` every `time_interval`"""
         print(f"Thread for sending heartbeats to {intf_name} started!")
         send_socket = socket.socket(socket.AF_PACKET, socket.SOCK_RAW)
@@ -47,7 +44,7 @@ class HeartBeatGenerator(object):
                 # build packet
                 pkt = self.__build_packet(port)
                 send_socket.send(pkt)
-            time.sleep(time_interval)
+            time.sleep(self.time_interval)
 
     def run(self):
         """Main runner"""
@@ -61,17 +58,9 @@ class HeartBeatGenerator(object):
                 # get port to specific neighbor
                 sw_port = self.topo.node_to_node_port_num(switch, neighbor_switch)
                 neighs_ports.append(sw_port)
-
+            interface = self.topo.get_ctl_cpu_intf(switch)
+            # Give every beat its on thread so they are send more accuratly in the time_interval.
+            t = threading.Thread(target=self.__send_thread, args=(interface, neighs_ports), daemon=True)
+            t.start()
             all_neighs.append(neighs_ports)
-        
-        args = [(self.topo.get_ctl_cpu_intf(switch), all_neighs[i], self.time_interval) for i,switch in enumerate(self.topo.get_p4switches())]
-        #for i in range(0,len(args)):
-        #    # each thread is responsible for sending heartbeat from switch to ALL its neighs (~ N.switch threads)
-        #    t = threading.Thread(target=send_thread, args=(args[i]), daemon=True)
-        #    t.start()
-        #    # save all threads (currently not used)
-        #    self.traffic_threads.append(t)
-
-        # each thread is responsible for sending heartbeat from switch to ALL its neighs (~ N.switch threads)
-        print("Starting Heartbeat sending threads")
-        self.workers.map(self.__send_thread, args)
+        print("Started all heartbeat sending threads.")
