@@ -9,7 +9,7 @@ import numpy as np
 import time
 
 class RoutingTableManager(object):
-    def __init__(self, time_interval, controllers, topo, recovery_manager):
+    def __init__(self, time_interval, controllers, topo, recovery_manager, gloabl_interface_lock):
         """Initializes the topology and data structures."""
         self.time_interval = time_interval
         self.controllers = controllers
@@ -20,6 +20,7 @@ class RoutingTableManager(object):
         self.failed_links = set()
         self.failures_of_current_rt = set()
         self.lock = threading.Lock()
+        self.gloabl_interface_lock = gloabl_interface_lock
         self.t = None
         self.non_bridges = FRM.get_non_bridges(self.topo)
        
@@ -51,7 +52,9 @@ class RoutingTableManager(object):
                 routing_tables, Rlfas = self.recovery_manager.query_routing_state(self.failed_links)
                 self.lock.release()
                 print(f"Got routing table and rlfas. Loading...")
+                self.gloabl_interface_lock.acquire()
                 self.update_all_routing_tables(routing_tables, Rlfas, False)
+                self.gloabl_interface_lock.release()
                 print(f"Loading completed.")
             else:
                 self.lock.release()

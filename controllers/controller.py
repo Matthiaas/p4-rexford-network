@@ -29,15 +29,17 @@ class Controller(object):
         self.failed_links = set() #current set of failed links
         path = sys.argv[0]
         self.base_path  = "/".join(path.split("/")[:-1])
+        self.gloabl_interface_lock = threading.Lock()
         self.recovery_manager = FRM(
             self.topo, self.base_path + "/configs/link_failure_map_generated.json")
         # Settings:
         self.settings = self.read_settings(self.base_path + "/configs/settings.json")
         self.hb_manager = HBG(self.settings["heartbeat_freq"], self.topo)
         self.qle = QueueLengthEstimator(self.settings["queue_len_estimator_sample_freq"], 
-                self.controllers)
+                self.controllers, self.gloabl_interface_lock)
         self.rt_manager = RoutingTableManager(self.settings["rt_manager_freq"],
-                self.controllers, self.topo, self.recovery_manager)
+                self.controllers, self.topo, self.recovery_manager, self.gloabl_interface_lock)
+        
         #self.workers = ThreadPool(16) # One worker for each thread
         self.init()
 
@@ -83,6 +85,7 @@ class Controller(object):
 
 
     def setup_way_points(self, way_point_file_name):
+        self.gloabl_interface_lock.acquire()
         wps = wpr.get_way_points(way_point_file_name)
         for src, dst, wp in wps:
             src_switch = RexfordUtils.get_switch_of_host(src)
@@ -94,6 +97,7 @@ class Controller(object):
             self.controllers[src_switch].table_add(
                 "udp_waypoint", action_name="set_waypoint", 
                 match_keys=[dst_addr], action_params=[wp_addr])
+        self.gloabl_interface_lock.release()
                 
     def setup_meters(self):
         commited_queue_length = self.settings["commited_queue_length"]
@@ -104,6 +108,7 @@ class Controller(object):
 
         packet_size = self.settings["packet_size"]
 
+        self.gloabl_interface_lock.acquire()
         for controller in self.controllers.values():
             cir =  commited_rate                         # commited information rate [bytes/s]
             cbs =  commited_queue_length * packet_size   # commited burst size       [bytes]
@@ -137,6 +142,7 @@ class Controller(object):
 
             red = (peak_rate, 40 * packet_size)
             controller.meter_array_set_rates("queu_len_40", [yellow, red])
+        self.gloabl_interface_lock.release()
 
     def connect_to_switches(self):
         """Connects to switches"""
@@ -148,9 +154,11 @@ class Controller(object):
 
     def set_mirroring_sessions(self):
         """Set mirroring sessions for cloned packets"""
+        self.gloabl_interface_lock.acquire()
         for p4switch in self.topo.get_p4switches():
             cpu_port = self.topo.get_cpu_port_index(p4switch)
             self.controllers[p4switch].mirroring_add(100, cpu_port)
+        self.gloabl_interface_lock.release()
 
 
     def process_packet(self, pkt):
