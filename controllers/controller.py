@@ -109,14 +109,16 @@ class Controller(object):
 
         self.global_interface_lock.acquire()
         for controller in self.controllers.values():
-            cir =  committed_rate                         # committed information rate [bytes/s]
-            cbs =  committed_queue_length * packet_size   # committed burst size       [bytes]
+            cir =  committed_rate                        # committed information rate [bytes/s]
+            cbs =  committed_queue_length * packet_size  # committed burst size       [bytes]
             pir =  peak_rate                             # peak information rate     [bytes/s]
             pbs =  peak_queue_length * packet_size       # peak burst size           [bytes]
             yellow = (cir, cbs)
             red = (pir, pbs)
             controller.meter_array_set_rates("port_congestion_meter", [yellow, red])
 
+            # Color Yellow does not matter for the following meters since only the colors red
+            # is used for the queue length estimation. For more information look at egress.p4
             yellow = (cir, cbs)
             red = (peak_rate, 5 * packet_size)
             controller.meter_array_set_rates("queue_len_5", [yellow, red])
