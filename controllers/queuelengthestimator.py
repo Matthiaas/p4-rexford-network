@@ -1,11 +1,10 @@
 
 import time
 import threading
-from p4utils.utils.sswitch_thrift_API import SimpleSwitchThriftAPI
 import numpy as np
 import time
 
-max_ports = 10
+max_ports = 11
 
 def current_sec_time():
     return time.time() 

@@ -140,20 +140,28 @@ control MyEgress(inout headers hdr,
 
     apply {
         host_port_to_mac.apply();
-        if (hdr.heartbeat.isValid()){
-            if (std_meta.instance_type != 1){
-                //not cloned
-                hdr.heartbeat.from_cp = 0;
-            }
+        if (std_meta.instance_type == 1){
+            //cloned -> make it hearbeat
+            hdr.ethernet.setInvalid();
+            hdr.ipv4.setInvalid();
+            hdr.waypoint.setInvalid();
+            hdr.rexford_ipv4.setInvalid();
+            hdr.tcp.setInvalid();
+            hdr.udp.setInvalid();
+
+            hdr.heartbeat.setValid();
             hdr.heartbeat.failed_link = meta.hb_failed_link;
             hdr.heartbeat.recovered_link = meta.hb_recovered_link;
             hdr.heartbeat.port = meta.hb_port;
             hdr.heartbeat.etherType = 0x1235;
-            log_msg("HB Egress: port {} f {} r {} cloned {}",{hdr.heartbeat.port, hdr.heartbeat.failed_link, hdr.heartbeat.recovered_link, std_meta.instance_type});
-            port_bytes_out.count((bit<32>) std_meta.egress_port);
-        } else {
+        }
+        else{
+            hdr.heartbeat.from_cp = 0;
             port_bytes_out.count((bit<32>) std_meta.egress_port);
             estimate_queue_len_v2();
-        }   
+        }
+        if (hdr.heartbeat.isValid()){
+            log_msg("HB Egress: port {} f {} r {} cloned {}",{hdr.heartbeat.port, hdr.heartbeat.failed_link, hdr.heartbeat.recovered_link, std_meta.instance_type});
+        }
     }
 }
