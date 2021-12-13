@@ -8,69 +8,69 @@ control MyEgress(inout headers hdr,
 
     counter(MAX_PORTS, CounterType.bytes) port_bytes_out;
 
-    meter((bit<32>) MAX_PORTS, MeterType.bytes) queu_len_5;
-    meter((bit<32>) MAX_PORTS, MeterType.bytes) queu_len_10;
-    meter((bit<32>) MAX_PORTS, MeterType.bytes) queu_len_15;
-    meter((bit<32>) MAX_PORTS, MeterType.bytes) queu_len_20;
-    meter((bit<32>) MAX_PORTS, MeterType.bytes) queu_len_25;
-    meter((bit<32>) MAX_PORTS, MeterType.bytes) queu_len_30;
-    meter((bit<32>) MAX_PORTS, MeterType.bytes) queu_len_35;
-    meter((bit<32>) MAX_PORTS, MeterType.bytes) queu_len_40;
+    meter((bit<32>) MAX_PORTS, MeterType.bytes) queue_len_5;
+    meter((bit<32>) MAX_PORTS, MeterType.bytes) queue_len_10;
+    meter((bit<32>) MAX_PORTS, MeterType.bytes) queue_len_15;
+    meter((bit<32>) MAX_PORTS, MeterType.bytes) queue_len_20;
+    meter((bit<32>) MAX_PORTS, MeterType.bytes) queue_len_25;
+    meter((bit<32>) MAX_PORTS, MeterType.bytes) queue_len_30;
+    meter((bit<32>) MAX_PORTS, MeterType.bytes) queue_len_35;
+    meter((bit<32>) MAX_PORTS, MeterType.bytes) queue_len_40;
 
 
-    action estimat_queue_len_v2() {
+    action estimate_queue_len_v2() {
         /*
-            This is the Queue Lengt Estimator Version 2.
-            It sets up a couple of meters all with the same peak bandwith but different
+            This is the Queue Length Estimator Version 2.
+            It sets up a couple of meters all with the same peak bandwidth but different
             burst sizes (= queue lengths). Whenever a meter is hits Red (we are not using
-            the color yellow here), we assume that the burst size of this meter equlas the 
-            current length of the queue behing our switch.
+            the color yellow here), we assume that the burst size of this meter equals the 
+            current length of the queue behind our switch.
 
-            This only provides this invariante:
-                Meter x hits read ---implies---> Queulength is at least x
+            This only provides this invariant:
+                Meter x hits read ---implies---> Queue length is at least x
 
-            In order to get an even better estimate we only upate the estimated_queue_len_v2
-            if the current estimate is smaller than the new one (because of our invariante). 
-            To decrease the queulength estimate we decrease the counter whenever we receive 
+            In order to get an even better estimate we only update the estimated_queue_len_v2
+            if the current estimate is smaller than the new one (because of our invariant). 
+            To decrease the queue length estimate we decrease the counter whenever we receive 
             a heartbeat from the controller by one for every 1.2ms that have passed.
-            The heartbeat frequeny should be a mulpile of 1.2ms to easily achuive this.            
+            The heartbeat frequency should be a multiple of 1.2ms to easily achieve this.            
         */
         bit<2> congestion_tag;
-        queu_len_5.execute_meter((bit<32>) std_meta.egress_port, congestion_tag);
+        queue_len_5.execute_meter((bit<32>) std_meta.egress_port, congestion_tag);
         
         bit<32> queueLen = 0;
 
-        queu_len_10.execute_meter((bit<32>) std_meta.egress_port, congestion_tag);
+        queue_len_10.execute_meter((bit<32>) std_meta.egress_port, congestion_tag);
         if(congestion_tag == V1MODEL_METER_COLOR_RED) {
             queueLen = 5;
         }
 
-        queu_len_15.execute_meter((bit<32>) std_meta.egress_port, congestion_tag);
+        queue_len_15.execute_meter((bit<32>) std_meta.egress_port, congestion_tag);
         if(congestion_tag == V1MODEL_METER_COLOR_RED) {
             queueLen = 15;
         }
         
-        queu_len_20.execute_meter((bit<32>) std_meta.egress_port, congestion_tag);
+        queue_len_20.execute_meter((bit<32>) std_meta.egress_port, congestion_tag);
         if(congestion_tag == V1MODEL_METER_COLOR_RED) {
             queueLen = 20;
         }
         
-        queu_len_25.execute_meter((bit<32>) std_meta.egress_port, congestion_tag);
+        queue_len_25.execute_meter((bit<32>) std_meta.egress_port, congestion_tag);
         if(congestion_tag == V1MODEL_METER_COLOR_RED) {
             queueLen = 25;
         }
         
-        queu_len_30.execute_meter((bit<32>) std_meta.egress_port, congestion_tag);
+        queue_len_30.execute_meter((bit<32>) std_meta.egress_port, congestion_tag);
         if(congestion_tag == V1MODEL_METER_COLOR_RED) {
             queueLen = 30;
         }
         
-        queu_len_35.execute_meter((bit<32>) std_meta.egress_port, congestion_tag);
+        queue_len_35.execute_meter((bit<32>) std_meta.egress_port, congestion_tag);
         if(congestion_tag == V1MODEL_METER_COLOR_RED) {
             queueLen = 35;
         }
         
-        queu_len_40.execute_meter((bit<32>) std_meta.egress_port, congestion_tag);
+        queue_len_40.execute_meter((bit<32>) std_meta.egress_port, congestion_tag);
         if(congestion_tag == V1MODEL_METER_COLOR_RED) {
             queueLen = 40;
         }
@@ -111,7 +111,7 @@ control MyEgress(inout headers hdr,
 
         hdr.ipv4.src_network      = 0x0A00;
         hdr.ipv4.src_rexford_addr = (bit<8>) hdr.rexford_ipv4.srcAddr;
-        // TODO: This is an awfull hack. We should either use tables or use 5 bit as adresses or so.
+        // TODO: This is an awful hack. We should either use tables or use 5 bit as addresses or so.
         if (hdr.ipv4.src_rexford_addr == 0) {
             hdr.ipv4.src_rexford_addr = 16;
         }
@@ -119,7 +119,7 @@ control MyEgress(inout headers hdr,
         
         hdr.ipv4.dst_network      = 0x0A00;
         hdr.ipv4.dst_rexford_addr = (bit<8>) hdr.rexford_ipv4.dstAddr;
-        // TODO: This is an awfull hack. We should either use tables or use 5 bit as adresses or so.
+        // TODO: This is an awful hack. We should either use tables or use 5 bit as addresses or so.
         if (hdr.ipv4.dst_rexford_addr == 0) {
             hdr.ipv4.dst_rexford_addr = 16;
         }
@@ -153,7 +153,7 @@ control MyEgress(inout headers hdr,
             port_bytes_out.count((bit<32>) std_meta.egress_port);
         } else {
             port_bytes_out.count((bit<32>) std_meta.egress_port);
-            estimat_queue_len_v2();
+            estimate_queue_len_v2();
         }   
     }
 }

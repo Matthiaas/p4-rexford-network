@@ -17,15 +17,15 @@ control MyIngress(inout headers hdr,
     // This is used to only drop one packet every DROP_FLOWLET_TIMEOUT when the
     // meter turns yellow.
     register<bit<1>>(REGISTER_SIZE) flowlet_dropped;
-    register<timestamp_t>(REGISTER_SIZE) flowlet_lastdrop_time_stamp;
+    register<timestamp_t>(REGISTER_SIZE) flowlet_last_drop_time_stamp;
 
 
     // This is filled by the controller and uses the port_bytes_out information for it.
     register<bit<32>>(MAX_PORTS) estimated_queue_len;
 
     // port -> last seen timestamp for rec/sent packet
-    register<bit<48>>(MAX_PORTS) rec_tstp;
-    register<bit<48>>(MAX_PORTS) sent_tstp;
+    register<bit<48>>(MAX_PORTS) recv_timestamp;
+    register<bit<48>>(MAX_PORTS) sent_timestamp;
 
     // port(link) -> 0(OK) | 1(FAIL)
     register<bit<1>>(MAX_PORTS) linkState;
@@ -46,17 +46,17 @@ control MyIngress(inout headers hdr,
 
     // Heartbeat related actions:
 
-    action get_rec_tstp_for_port(bit<9> port){
-        rec_tstp.read(meta.timestamp,(bit<32>)port);
+    action get_recv_timestamp_for_port(bit<9> port){
+        recv_timestamp.read(meta.timestamp,(bit<32>)port);
     }
-    action set_rec_tstp_for_port(bit<9> port){
-        rec_tstp.write((bit<32>)port, std_meta.ingress_global_timestamp);
+    action set_recv_timestamp_for_port(bit<9> port){
+        recv_timestamp.write((bit<32>)port, std_meta.ingress_global_timestamp);
     }
-    action get_sent_tstp_for_port(bit<9> port){
-        sent_tstp.read(meta.timestamp,(bit<32>)port);
+    action get_sent_timestamp_for_port(bit<9> port){
+        sent_timestamp.read(meta.timestamp,(bit<32>)port);
     }
-    action set_sent_tstp_for_port(bit<9> port){
-        sent_tstp.write((bit<32>)port, std_meta.ingress_global_timestamp);
+    action set_sent_timestamp_for_port(bit<9> port){
+        sent_timestamp.write((bit<32>)port, std_meta.ingress_global_timestamp);
     }
     action fail_linkState(bit<9> port){
         linkState.write((bit<32>)port, (bit<1>)1);
@@ -85,7 +85,7 @@ control MyIngress(inout headers hdr,
 
         //Read previous time stamp
         flowlet_time_stamp.read(meta.flowlet_last_stamp, (bit<32>)meta.flowlet_register_index);
-        flowlet_lastdrop_time_stamp.read(meta.flowlet_lastdropped_stamp, (bit<32>)meta.flowlet_register_index);
+        flowlet_last_drop_time_stamp.read(meta.flowlet_last_dropped_stamp, (bit<32>)meta.flowlet_register_index);
 
         //Read previous flowlet id
         flowlet_to_id.read(meta.flowlet_id, (bit<32>)meta.flowlet_register_index);
@@ -104,7 +104,7 @@ control MyIngress(inout headers hdr,
         bit<32> random_t;
         random(random_t, (bit<32>)0, (bit<32>)65000);
         meta.flowlet_id = (bit<16>)random_t;
-        // Only make this permanent for TCP. The next UDP packet can go whereever.
+        // Only make this permanent for TCP. The next UDP packet can go wherever.
         flowlet_to_id.write((bit<32>)meta.flowlet_register_index, (bit<16>)meta.flowlet_id);
         
     }
@@ -151,7 +151,7 @@ control MyIngress(inout headers hdr,
                     meta.srcPort, // This can be either TCP or UDP port
                     meta.dstPort, // This can be either TCP or UDP port
                     hdr.rexford_ipv4.protocol,
-                    meta.flowlet_id // For UDP this is actually the only neccessary one.
+                    meta.flowlet_id // For UDP this is actually the only necessary one.
                 },
 	            num_nhops);
 
@@ -231,7 +231,7 @@ control MyIngress(inout headers hdr,
         size = MAX_PORTS;
         default_action = NoAction();
     }
-    // Actions for the main Ingresspipeline:
+    // Actions for the main Ingress pipeline:
     action set_meta_ports() {
         if (hdr.tcp.isValid()) {
             meta.srcPort = hdr.tcp.srcPort;
@@ -279,68 +279,15 @@ control MyIngress(inout headers hdr,
         
         // This line for whatever reason lets the compiler give up.
        bit<32> dropProbability = 0;
-
-    /*
-        // The values in here are pretty arbitrary. But tweeked by testing different numbers.
         if(!hdr.tcp.isValid() && !hdr.udp.isValid()) {
-            // Priority 0.
-            // Internal traffic like heartbeats.
-            // Never drop them.
-            dropProbability = 0;
-        } else if( meta.srcPort <= 100 && meta.dstPort <= 100) {
-            // Priority 1.
-            if (queueLen > 25 && hdr.tcp.isValid()) {
-                times_ten(queueLen - 25, dropProbability);
-            } else {
-                dropProbability = 0;
-            }
-        } else if( meta.srcPort <= 200 && meta.dstPort <= 200) {
-            // Priority 2.
-            if (queueLen > 20) {
-                times_ten(queueLen - 20, dropProbability);
-            } else {
-                dropProbability = 0;
-            }
-        } else if( meta.srcPort <= 300 && meta.dstPort <= 300) {
-            // Priority 3.
-            if (queueLen > 15 ) {
-                times_ten(queueLen - 15, dropProbability);
-            } else {
-                dropProbability = 0;
-            }
-        } else if( meta.srcPort <= 400 && meta.dstPort <= 400) {
-            // Priority 4.
-            if (queueLen > 0) {
-                times_ten(queueLen, dropProbability);
-            } else {
-                dropProbability = 0;
-            }
-        } else if( meta.srcPort <= 65000 && meta.dstPort <= 65000 &&
-                    60001 <= meta.srcPort && 60001 <= meta.dstPort) {
-            // Lowest priority (Its only 3SLAs and we dont know how weird it is going to be).
-            // Priority 5.
-            dropProbability = 0;
-            if (queueLen > 0) {
-                dropProbability = 100;
-            } else {
-                dropProbability = 0;
-            }
-            
-        } else {
-            // Traffic is not considered in any SLA.
-            dropProbability = 1;
-        }
-        */
-        // This seems to outperfrom the priority stuff.
-        // TODO: Test this for failures.
-        if(!hdr.tcp.isValid() && !hdr.udp.isValid()) {
-            // Priority 0.
-            // Internal traffic like heartbeats.
-            // Never drop them.
+            // Internal traffic like heartbeats. --> Never drop them.
             dropProbability = 0;
         } else if( meta.srcPort <= 65000 && meta.dstPort <= 65000 
                     && 60001 <= meta.srcPort && 60001 <= meta.dstPort
                         && queueLen > 0) {
+            // Always drop this traffic when we start up building queues.
+            // There are also no bursts since its UDP only, so its fine.
+            // So we only transmit this if there is no other traffic needing the bandwidth.
             dropProbability = 100;           
         } else {
             if(queueLen > 7) {
@@ -370,7 +317,7 @@ control MyIngress(inout headers hdr,
             if (hdr.heartbeat.from_cp == 1){
                 update_queue_length_estimate_v2();
                 // From cont -> check last rec timestamp
-                get_rec_tstp_for_port(hdr.heartbeat.port);
+                get_recv_timestamp_for_port(hdr.heartbeat.port);
                 if (meta.timestamp != 0 && (std_meta.ingress_global_timestamp - meta.timestamp > THRESHOLD_REC)){
                     //Update linkstate -> notify cont
                     check_linkState(hdr.heartbeat.port);
@@ -389,10 +336,10 @@ control MyIngress(inout headers hdr,
                     }
                 }
                 //check last time we sent something to this port
-                get_sent_tstp_for_port(hdr.heartbeat.port); 
+                get_sent_timestamp_for_port(hdr.heartbeat.port); 
                 if (std_meta.ingress_global_timestamp - meta.timestamp > THRESHOLD_SENT){
                     //Send heartbeat to port
-                    set_sent_tstp_for_port(hdr.heartbeat.port);
+                    set_sent_timestamp_for_port(hdr.heartbeat.port);
                     std_meta.egress_spec = hdr.heartbeat.port;
                 } else {
                     // no need to forward the heartbeat -> drop
@@ -400,7 +347,7 @@ control MyIngress(inout headers hdr,
                 }
             } else {
                 // From neigh -> update last seen timestamp
-                set_rec_tstp_for_port(std_meta.ingress_port);
+                set_recv_timestamp_for_port(std_meta.ingress_port);
                 check_linkState(std_meta.ingress_port);
                 if (meta.linkState == 1){
                     recover_linkState(std_meta.ingress_port);
@@ -421,7 +368,7 @@ control MyIngress(inout headers hdr,
             }
         } else {
             //Normal traffic
-            set_rec_tstp_for_port(std_meta.ingress_port);
+            set_recv_timestamp_for_port(std_meta.ingress_port);
             check_linkState(std_meta.ingress_port);
             if (meta.linkState == 1){
                 recover_linkState(std_meta.ingress_port);
@@ -488,7 +435,7 @@ control MyIngress(inout headers hdr,
             if ((!hdr.waypoint.isValid() && from_host) || reached_waypoint) {
                 // Packet comes from host and is not waypointed, or just reached the waypoint here.
                 // Only consider packets that come from a host that are not waypointed.
-                // This is because waypointed traffic is not allowed to change the headers to be recognised by the tests.
+                // This is because waypointed traffic is not allowed to change the headers to be recognized by the tests.
                 debug.write((bit<32>)2,(bit<1>)1);
                 construct_rexford_headers();
             }
@@ -512,9 +459,9 @@ control MyIngress(inout headers hdr,
                         update_tcp_flowlet_id();
                     }
 
-                    bit<48> flowlet_droptime_diff = std_meta.ingress_global_timestamp - meta.flowlet_last_stamp;
+                    bit<48> flowlet_drop_time_diff = std_meta.ingress_global_timestamp - meta.flowlet_last_stamp;
                     // If the drop is longer than DROP_FLOWLET_TIMEOUT ago, possibly allow a new drop on this flow.
-                    if (meta.flowlet_lastdropped_stamp > DROP_FLOWLET_TIMEOUT) {
+                    if (meta.flowlet_last_dropped_stamp > DROP_FLOWLET_TIMEOUT) {
                         flowlet_dropped.write((bit<32>)meta.flowlet_register_index, 0);
                     }
                 } else {
@@ -537,19 +484,19 @@ control MyIngress(inout headers hdr,
                 // - Yellow: Defines a threshold where we drop a single packet in order to make sure the TCP flow does not 
                 //           further increase its rate in the future. This is based on:
                 //            https://www.researchgate.net/publication/301857331_Global_Synchronization_Protection_for_Bandwidth_Sharing_TCP_Flows_in_High-Speed_Links
-                // - Red: We exceed the max bandwith with the max queulength 
+                // - Red: We exceed the max bandwidth with the max queue length 
                 //      --> We are forced to drop every packet to not increase the delay by to much. 
                 // (This can not be put into its own action since it conditionally calls actions.) -> We can feel the pain
                 bit<2> congestion_tag;
                 port_congestion_meter.execute_meter((bit<32>) std_meta.egress_spec, congestion_tag);
                 if(congestion_tag == V1MODEL_METER_COLOR_YELLOW) {
                     if(hdr.tcp.isValid()) {
-                        bit<1> dopped_flowlet;
-                        flowlet_dropped.read(dopped_flowlet, (bit<32>)meta.flowlet_register_index);
-                        if(dopped_flowlet == 0) {
+                        bit<1> dropped_flowlet;
+                        flowlet_dropped.read(dropped_flowlet, (bit<32>)meta.flowlet_register_index);
+                        if(dropped_flowlet == 0) {
                             meta.drop_packet = true;
                             flowlet_dropped.write((bit<32>)meta.flowlet_register_index, 1);
-                            flowlet_lastdrop_time_stamp.write((bit<32>)meta.flowlet_register_index, std_meta.ingress_global_timestamp);
+                            flowlet_last_drop_time_stamp.write((bit<32>)meta.flowlet_register_index, std_meta.ingress_global_timestamp);
                         }
                     }
                 } else if(congestion_tag == V1MODEL_METER_COLOR_RED) {
@@ -561,8 +508,8 @@ control MyIngress(inout headers hdr,
             if (meta.drop_packet && std_meta.egress_spec != host_port) {
                 mark_to_drop(std_meta);
             } else {
-                // If we dont drop it, mark it as a heartbeat.
-                set_sent_tstp_for_port(std_meta.egress_spec);
+                // If we don't drop it, mark it as a heartbeat.
+                set_sent_timestamp_for_port(std_meta.egress_spec);
             }
         }
     }

@@ -41,7 +41,7 @@ class HeartBeatGenerator(object):
         send_socket.bind((intf_name, 0))
         while True:
             for port in neighs_ports:
-                # build packet
+                # Build packet.
                 pkt = self.__build_packet(port)
                 send_socket.send(pkt)
             time.sleep(self.time_interval)
@@ -50,16 +50,16 @@ class HeartBeatGenerator(object):
         """Main runner"""
         print("Running Heartbeat Manager!")
         all_neighs = []
-        # for each switch
+        # For each switch.
         for switch in self.topo.get_p4switches():
             neighs_ports = []
-            # get all direct switches and add direct entry
+            # Get all direct switches and add direct entry.
             for neighbor_switch in self.topo.get_p4switches_connected_to(switch):
                 # get port to specific neighbor
                 sw_port = self.topo.node_to_node_port_num(switch, neighbor_switch)
                 neighs_ports.append(sw_port)
             interface = self.topo.get_ctl_cpu_intf(switch)
-            # Give every beat its on thread so they are send more accuratly in the time_interval.
+            # Give every beat its on thread so they are send more accurately in the time_interval.
             t = threading.Thread(target=self.__send_thread, args=(interface, neighs_ports), daemon=True)
             t.start()
             all_neighs.append(neighs_ports)

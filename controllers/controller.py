@@ -4,7 +4,7 @@ from p4utils.utils.sswitch_thrift_API import SimpleSwitchThriftAPI
 from multiprocessing.pool import ThreadPool
 from recovery import Fast_Recovery_Manager as FRM
 from heartbeat import HeartBeatGenerator as HBG
-from queulengthestimator import QueueLengthEstimator 
+from queuelengthestimator import QueueLengthEstimator 
 from routingtablemanager import RoutingTableManager
 from digestmanager import DigestManager as DG
 from rexfordutils import RexfordUtils
@@ -29,16 +29,16 @@ class Controller(object):
         self.failed_links = set() #current set of failed links
         path = sys.argv[0]
         self.base_path  = "/".join(path.split("/")[:-1])
-        self.gloabl_interface_lock = threading.Lock()
+        self.global_interface_lock = threading.Lock()
         self.recovery_manager = FRM(
             self.topo, self.base_path + "/configs/link_failure_map_generated.json")
         # Settings:
         self.settings = self.read_settings(self.base_path + "/configs/settings.json")
         self.hb_manager = HBG(self.settings["heartbeat_freq"], self.topo)
         self.qle = QueueLengthEstimator(self.settings["queue_len_estimator_sample_freq"], 
-                self.controllers, self.gloabl_interface_lock)
+                self.controllers, self.global_interface_lock)
         self.rt_manager = RoutingTableManager(self.settings["rt_manager_freq"],
-                self.controllers, self.topo, self.recovery_manager, self.gloabl_interface_lock)
+                self.controllers, self.topo, self.recovery_manager, self.global_interface_lock)
         
         #self.workers = ThreadPool(16) # One worker for each thread
         self.init()
@@ -85,7 +85,7 @@ class Controller(object):
 
 
     def setup_way_points(self, way_point_file_name):
-        self.gloabl_interface_lock.acquire()
+        self.global_interface_lock.acquire()
         wps = wpr.get_way_points(way_point_file_name)
         for src, dst, wp in wps:
             src_switch = RexfordUtils.get_switch_of_host(src)
@@ -97,21 +97,21 @@ class Controller(object):
             self.controllers[src_switch].table_add(
                 "udp_waypoint", action_name="set_waypoint", 
                 match_keys=[dst_addr], action_params=[wp_addr])
-        self.gloabl_interface_lock.release()
+        self.global_interface_lock.release()
                 
     def setup_meters(self):
-        commited_queue_length = self.settings["commited_queue_length"]
-        commited_rate = self.settings["commited_rate"]
+        committed_queue_length = self.settings["committed_queue_length"]
+        committed_rate = self.settings["committed_rate"]
 
         peak_queue_length = self.settings["peak_queue_length"]
         peak_rate = self.settings["peak_rate"]
 
         packet_size = self.settings["packet_size"]
 
-        self.gloabl_interface_lock.acquire()
+        self.global_interface_lock.acquire()
         for controller in self.controllers.values():
-            cir =  commited_rate                         # commited information rate [bytes/s]
-            cbs =  commited_queue_length * packet_size   # commited burst size       [bytes]
+            cir =  committed_rate                         # committed information rate [bytes/s]
+            cbs =  committed_queue_length * packet_size   # committed burst size       [bytes]
             pir =  peak_rate                             # peak information rate     [bytes/s]
             pbs =  peak_queue_length * packet_size       # peak burst size           [bytes]
             yellow = (cir, cbs)
@@ -120,29 +120,29 @@ class Controller(object):
 
             yellow = (cir, cbs)
             red = (peak_rate, 5 * packet_size)
-            controller.meter_array_set_rates("queu_len_5", [yellow, red])
+            controller.meter_array_set_rates("queue_len_5", [yellow, red])
 
             red = (peak_rate, 10 * packet_size)
-            controller.meter_array_set_rates("queu_len_10", [yellow, red])
+            controller.meter_array_set_rates("queue_len_10", [yellow, red])
 
             red = (peak_rate, 15 * packet_size)
-            controller.meter_array_set_rates("queu_len_15", [yellow, red])
+            controller.meter_array_set_rates("queue_len_15", [yellow, red])
 
             red = (peak_rate, 20 * packet_size)
-            controller.meter_array_set_rates("queu_len_20", [yellow, red])
+            controller.meter_array_set_rates("queue_len_20", [yellow, red])
 
             red = (peak_rate, 25 * packet_size)
-            controller.meter_array_set_rates("queu_len_25", [yellow, red])
+            controller.meter_array_set_rates("queue_len_25", [yellow, red])
 
             red = (peak_rate, 30 * packet_size)
-            controller.meter_array_set_rates("queu_len_30", [yellow, red])
+            controller.meter_array_set_rates("queue_len_30", [yellow, red])
 
             red = (peak_rate, 35 * packet_size)
-            controller.meter_array_set_rates("queu_len_35", [yellow, red])
+            controller.meter_array_set_rates("queue_len_35", [yellow, red])
 
             red = (peak_rate, 40 * packet_size)
-            controller.meter_array_set_rates("queu_len_40", [yellow, red])
-        self.gloabl_interface_lock.release()
+            controller.meter_array_set_rates("queue_len_40", [yellow, red])
+        self.global_interface_lock.release()
 
     def connect_to_switches(self):
         """Connects to switches"""
@@ -154,11 +154,11 @@ class Controller(object):
 
     def set_mirroring_sessions(self):
         """Set mirroring sessions for cloned packets"""
-        self.gloabl_interface_lock.acquire()
+        self.global_interface_lock.acquire()
         for p4switch in self.topo.get_p4switches():
             cpu_port = self.topo.get_cpu_port_index(p4switch)
             self.controllers[p4switch].mirroring_add(100, cpu_port)
-        self.gloabl_interface_lock.release()
+        self.global_interface_lock.release()
 
 
     def process_packet(self, pkt):
