@@ -1,6 +1,6 @@
 {
-    "commited_queue_length": 25,
-    "commited_rate": 1,
+    "committed_queue_length": 25,
+    "committed_rate": 1,
     "peak_queue_length":25,
     "peak_rate": 1.25,
     "packet_size": 1600,

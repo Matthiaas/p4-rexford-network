@@ -6,7 +6,6 @@ from recovery import Fast_Recovery_Manager as FRM
 from heartbeat import HeartBeatGenerator as HBG
 from queuelengthestimator import QueueLengthEstimator 
 from routingtablemanager import RoutingTableManager
-from digestmanager import DigestManager as DG
 from rexfordutils import RexfordUtils
 import json
 from scapy.all import *

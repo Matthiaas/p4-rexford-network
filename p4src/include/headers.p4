@@ -64,7 +64,7 @@ struct metadata {
     bool    scmp_new_split;
 
     bit<48> flowlet_last_stamp;
-    bit<48> flowlet_lastdropped_stamp;
+    bit<48> flowlet_last_dropped_stamp;
     
     bit<13> flowlet_register_index;
     bit<16> flowlet_id;
