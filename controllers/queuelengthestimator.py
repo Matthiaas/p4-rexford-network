@@ -9,11 +9,10 @@ max_ports = 11
 def current_sec_time():
     return time.time() 
 
-
-def estimate_queu_len_thread(cont, time_interval, global_interface_lock):
+def estimate_queue_len_thread(cont, time_interval, global_interface_lock):
     """
         This gives an estimate of the current queue length for each port for a given controller.
-        The result is then written into the estimated_queue_len register which then can be accessed
+        The result is then written into the counter_based_estimated_queue_len register which then can be accessed
         by the p4 code.
         The calculation is based on a counter that is increased in the egresspipeline for every
         packet.
@@ -25,9 +24,9 @@ def estimate_queu_len_thread(cont, time_interval, global_interface_lock):
     last_counts = np.zeros(max_ports)
     last_timestamp = np.full(max_ports, current_sec_time())
     est_queue_len = np.zeros(max_ports)
-    # This is a rough estimate on the max queulength 
-    # asuming there are not a lot of heartbeats or similar in there.
-    max_queu_len = 1500 * 100
+    # This is a rough estimate on the max queue length 
+    # assuming there are not a lot of heartbeats or similar in there.
+    max_queue_len = 1500 * 100
     while True:
         global_interface_lock.acquire()
         for i in range(max_ports):
@@ -39,8 +38,8 @@ def estimate_queu_len_thread(cont, time_interval, global_interface_lock):
                 added = newbyte_count - last_counts[i]
                 last_counts[i] = newbyte_count
                 lost = 1250000 * time_passed 
-                est_queue_len[i] = min(max(0,est_queue_len[i] + added - lost), max_queu_len)
-                cont.register_write("estimated_queue_len", i, int(est_queue_len[i] / 1500 ))
+                est_queue_len[i] = min(max(0,est_queue_len[i] + added - lost), max_queue_len)
+                cont.register_write("counter_based_estimated_queue_len", i, int(est_queue_len[i] / 1500 ))
             except:
                 # This should not happen, but just to be sure. It does not matter if it fails one time.
                 continue
@@ -48,7 +47,7 @@ def estimate_queu_len_thread(cont, time_interval, global_interface_lock):
         time.sleep(time_interval)
 
 class QueueLengthEstimator(object):
-    """Queu Lengt Estimator."""
+    """Queue Length Estimator."""
     """
         Estimates the out quelength for every port on every switch.
     """
@@ -60,13 +59,11 @@ class QueueLengthEstimator(object):
         self.global_interface_lock = global_interface_lock
         self.traffic_threads = []
         
-       
-
     def run(self):
         """Main runner"""
         # for each switch
         for _, cont in self.controllers.items():
-            t = threading.Thread(target=estimate_queu_len_thread, args=(cont, self.time_interval, self.global_interface_lock), daemon=True)
+            t = threading.Thread(target=estimate_queue_len_thread, args=(cont, self.time_interval, self.global_interface_lock), daemon=True)
             t.start()
             # save all threads (currently not used)
             self.traffic_threads.append(t)

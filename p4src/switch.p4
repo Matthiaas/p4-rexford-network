@@ -19,7 +19,7 @@
 #define MAX_SCMP_SPLITS 3
 
 // Globals:
-register<bit<32>>(MAX_PORTS) estimated_queue_len_v2;
+register<bit<32>>(MAX_PORTS) meter_based_estimated_queue_len;
 
 #include "ingress.p4"
 #include "egress.p4"

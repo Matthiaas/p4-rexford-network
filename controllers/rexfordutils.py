@@ -18,7 +18,7 @@ class RexfordUtils(object):
         # Since our address is 4 bit "16" should be mapped to "0".
         addr = ipstr.split(".")[2]
         if addr == "16":
-            # TODO: This is an awfull hack. We should either use tables or use 5 bit as adresses or so.
+            # TODO: This is an awful hack. We should either use tables or use 5 bit as addresses or so.
             # See switch.p4
             addr = "0"
         return addr

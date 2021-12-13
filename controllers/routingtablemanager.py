@@ -44,7 +44,6 @@ class RoutingTableManager(object):
 
     def __check_changed(self):
         while True:
-            #print("Investigating changes...")
             self.lock.acquire()
             if self.has_changed:
                 print("Change found. Getting routing tables for failure: ", self.failed_links)
@@ -93,7 +92,7 @@ class RoutingTableManager(object):
                             next_port=nexthop_escmp_ports[0], 
                             lfa_port=lfa_port, init=init)
                 else:
-                    self.__modifiy_or_add(cont=cont,
+                    self.__modify_or_add(cont=cont,
                             table_name="ipv4_forward", 
                             action_name="escmp_group", 
                             match_keys=[host_addr],
@@ -113,17 +112,17 @@ class RoutingTableManager(object):
             for neigh, rlfa in Rlfas[p4switch].items():
                 if rlfa != "":
                     link_port = self.topo.node_to_node_port_num(p4switch, neigh)
-                    #get nexthop for getting to the rlfa
+                    # Get nexthop for getting to the rlfa.
                     rlfa_host = RexfordUtils.get_rexford_addr(
                         self.topo, RexfordUtils.get_host_of_switch(rlfa))
                     rlfa_host_nexthops = rt[RexfordUtils.get_host_of_switch(rlfa)]["nexthops"]
                     rlfa_port = 0
                     for nh in rlfa_host_nexthops:
-                        #clearly has to be different than the neigh for which the link fails
+                        # Clearly has to be different than the neighbor for which the link fails.
                         if nh != neigh:
                             rlfa_port = self.topo.node_to_node_port_num(p4switch, nh)
                     print(f"Adding Rlfa link {p4switch}--{neigh} rlfa: {rlfa} port: {rlfa_port}")
-                    self.__modifiy_or_add(cont=cont,
+                    self.__modify_or_add(cont=cont,
                             table_name="final_forward",
                             action_name="set_nexthop_lfa_rlfa",
                             match_keys=[str(link_port)],
@@ -132,7 +131,7 @@ class RoutingTableManager(object):
                            
         self.workers.map(update_singel_routing_table, self.topo.get_p4switches())
 
-    def __modifiy_or_add(self, cont, table_name, action_name, match_keys, action_params=[], init=False):
+    def __modify_or_add(self, cont, table_name, action_name, match_keys, action_params=[], init=False):
             entry_handle = None
             if not init:
                 # No need to try to update the entry when we init.
@@ -142,14 +141,14 @@ class RoutingTableManager(object):
             else:
                 cont.table_add(table_name, action_name, match_keys, action_params)
 
-    # maps refxord addr or ecmp group to nexthop port and lfa if possible
+    # Maps refxord addr or ecmp group to nexthop port and lfa if possible.
     def __add_set_next_hop(self, cont, table_name, match_keys, next_port, lfa_port=None, init=False):
         if lfa_port:
-            self.__modifiy_or_add(cont=cont,
+            self.__modify_or_add(cont=cont,
                 table_name=table_name, action_name="set_nhop_and_lfa", 
                     match_keys=match_keys, action_params=[next_port, lfa_port])
         else:
-            self.__modifiy_or_add(cont=cont,
+            self.__modify_or_add(cont=cont,
                 table_name=table_name, action_name="set_nhop", 
                     match_keys=match_keys, action_params=[next_port])
 

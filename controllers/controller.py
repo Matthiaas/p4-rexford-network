@@ -4,9 +4,8 @@ from p4utils.utils.sswitch_thrift_API import SimpleSwitchThriftAPI
 from multiprocessing.pool import ThreadPool
 from recovery import Fast_Recovery_Manager as FRM
 from heartbeat import HeartBeatGenerator as HBG
-from queulengthestimator import QueueLengthEstimator 
+from queuelengthestimator import QueueLengthEstimator 
 from routingtablemanager import RoutingTableManager
-from digestmanager import DigestManager as DG
 from rexfordutils import RexfordUtils
 import json
 from scapy.all import *
@@ -100,8 +99,8 @@ class Controller(object):
         self.global_interface_lock.release()
                 
     def setup_meters(self):
-        commited_queue_length = self.settings["commited_queue_length"]
-        commited_rate = self.settings["commited_rate"]
+        committed_queue_length = self.settings["committed_queue_length"]
+        committed_rate = self.settings["committed_rate"]
 
         peak_queue_length = self.settings["peak_queue_length"]
         peak_rate = self.settings["peak_rate"]
@@ -110,38 +109,40 @@ class Controller(object):
 
         self.global_interface_lock.acquire()
         for controller in self.controllers.values():
-            cir =  commited_rate                         # commited information rate [bytes/s]
-            cbs =  commited_queue_length * packet_size   # commited burst size       [bytes]
+            cir =  committed_rate                        # committed information rate [bytes/s]
+            cbs =  committed_queue_length * packet_size  # committed burst size       [bytes]
             pir =  peak_rate                             # peak information rate     [bytes/s]
             pbs =  peak_queue_length * packet_size       # peak burst size           [bytes]
             yellow = (cir, cbs)
             red = (pir, pbs)
             controller.meter_array_set_rates("port_congestion_meter", [yellow, red])
 
+            # Color Yellow does not matter for the following meters since only the colors red
+            # is used for the queue length estimation. For more information look at egress.p4
             yellow = (cir, cbs)
             red = (peak_rate, 5 * packet_size)
-            controller.meter_array_set_rates("queu_len_5", [yellow, red])
+            controller.meter_array_set_rates("queue_len_5", [yellow, red])
 
             red = (peak_rate, 10 * packet_size)
-            controller.meter_array_set_rates("queu_len_10", [yellow, red])
+            controller.meter_array_set_rates("queue_len_10", [yellow, red])
 
             red = (peak_rate, 15 * packet_size)
-            controller.meter_array_set_rates("queu_len_15", [yellow, red])
+            controller.meter_array_set_rates("queue_len_15", [yellow, red])
 
             red = (peak_rate, 20 * packet_size)
-            controller.meter_array_set_rates("queu_len_20", [yellow, red])
+            controller.meter_array_set_rates("queue_len_20", [yellow, red])
 
             red = (peak_rate, 25 * packet_size)
-            controller.meter_array_set_rates("queu_len_25", [yellow, red])
+            controller.meter_array_set_rates("queue_len_25", [yellow, red])
 
             red = (peak_rate, 30 * packet_size)
-            controller.meter_array_set_rates("queu_len_30", [yellow, red])
+            controller.meter_array_set_rates("queue_len_30", [yellow, red])
 
             red = (peak_rate, 35 * packet_size)
-            controller.meter_array_set_rates("queu_len_35", [yellow, red])
+            controller.meter_array_set_rates("queue_len_35", [yellow, red])
 
             red = (peak_rate, 40 * packet_size)
-            controller.meter_array_set_rates("queu_len_40", [yellow, red])
+            controller.meter_array_set_rates("queue_len_40", [yellow, red])
         self.global_interface_lock.release()
 
     def connect_to_switches(self):
