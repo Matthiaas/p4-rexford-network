@@ -201,13 +201,18 @@ control MyIngress(inout headers hdr,
         if (meta.linkState == 1){
             //nexthop link down -> protect...
             //using lfa
-            if (meta.lfa != 0){
+            check_linkState(meta.lfa);
+            if (meta.lfa != 0 && meta.linkState != 1){
                 std_meta.egress_spec = meta.lfa;
             }
             //using rlfa
             else if (rlfa_port != 0){
                 std_meta.egress_spec = rlfa_port;
-                if (hdr.rexford_ipv4.isValid()){
+                check_linkState(rlfa_port);
+                if (meta.lnkState == 1){
+                    meta.drop_packet = true;
+                }
+                else if (hdr.rexford_ipv4.isValid()){
                     hdr.rexford_ipv4.original_dstAddr = meta.next_destination;
                     hdr.rexford_ipv4.dstAddr = rlfa_host;
                     hdr.rexford_ipv4.rlfa_protected = 1;
