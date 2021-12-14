@@ -76,7 +76,7 @@ class Fast_Recovery_Manager(object):
         #transform delay from string to float
         for e in g.edges:
             try:
-                g[e[0]][e[1]]['delay_w'] = float(g[e[0]][e[1]]['delay'].replace('ms','')) + 15.0
+                g[e[0]][e[1]]['delay_w'] = float(g[e[0]][e[1]]['delay'].replace('ms','')) + SETTINGS["switch_delay"]
             except:
                 g[e[0]][e[1]]['delay_w'] = float(1.0)
     
@@ -417,8 +417,9 @@ class Fast_Recovery_Manager(object):
                 delay_shortest = distances[src][dst]
                 def is_cheap_enough(lfa):
                     delay_scmp = distances[src][lfa] + distances[lfa][dst]
-                    #print(f"{src} - {dst}: {delay_shortest} {delay_scmp}")
                     diff = (delay_scmp - delay_shortest)
+                    # if diff < threshold:
+                    #     print(f"{src} - {dst}: {lfa} {delay_shortest} {delay_scmp}")
                     return (diff < threshold)
                 scmp_hops = [lfa for lfa in lfas if is_cheap_enough(lfa)]
                 scmps[src][dst] = scmp_hops
@@ -484,9 +485,6 @@ class Fast_Recovery_Manager(object):
                     lfa = []
                     scmp = []
                 routing_tbl[encode_vertex(sw)][encode_vertex(host)] = {"n":[encode_vertex(v) for v in this_nexthops], "l":lfa, "s": scmp}
-                if sw == 'FRA' and host == 'LIS_h0':
-                    print("NH", this_nexthops)
-                    print("RT", routing_tbl[encode_vertex(sw)][encode_vertex(host)])
         Rlfas_enc = {encode_vertex(k): {encode_vertex(e_k): encode_vertex(e_v) for e_k, e_v in e.items()} for k, e in Rlfas.items()}
         scenario = {"f": [encode_edge(x) for x in failures],\
                             "t": routing_tbl,\

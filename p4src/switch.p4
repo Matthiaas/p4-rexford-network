@@ -14,9 +14,9 @@
 #define THRESHOLD_REC 48w156000 // 0.30s -> if we don't see traffic for more than > fail
 #define THRESHOLD_SENT 48w48000 // 0.24s -> if we haven't seen traffic for more than > send
 #define REGISTER_SIZE 8192
-#define FLOWLET_TIMEOUT 48w200000 // 0.2s
+#define FLOWLET_TIMEOUT 48w20000 // 0.02s
 #define DROP_FLOWLET_TIMEOUT 48w100000 // 0.1s
-#define MAX_SCMP_SPLITS 1
+#define MAX_SCMP_SPLITS 2
 
 // Globals:
 register<bit<32>>(MAX_PORTS) meter_based_estimated_queue_len;
