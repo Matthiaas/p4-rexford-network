@@ -198,18 +198,22 @@ control MyIngress(inout headers hdr,
         //to be called after ipv4_forward
         //check the status of nexthop link and decide wt to use lfa or rlfa
         check_linkState(std_meta.egress_spec);
+
+
+
+
         if (meta.linkState == 1){
             //nexthop link down -> protect...
             //using lfa
-            check_linkState(meta.lfa);
+//            check_linkState(meta.lfa);
             if (meta.lfa != 0 && meta.linkState != 1){
                 std_meta.egress_spec = meta.lfa;
             }
             //using rlfa
             else if (rlfa_port != 0){
                 std_meta.egress_spec = rlfa_port;
-                check_linkState(rlfa_port);
-                if (meta.lnkState == 1){
+ //               check_linkState(rlfa_port);
+                if (meta.linkState == 1){
                     meta.drop_packet = true;
                 }
                 else if (hdr.rexford_ipv4.isValid()){
@@ -465,6 +469,21 @@ control MyIngress(inout headers hdr,
             }
             //check nexthop status and in case route using the lfa or rlfa
             final_forward.apply();
+
+            /*
+            if (meta.srcPort <= 300 && meta.srcPort > 200 && from_host) {
+                if (hdr.tcp.isValid()) {
+                    meta.drop_packet = true;
+                } else {
+                    random_drop(99);
+                }  
+            }
+            if (meta.srcPort <= 100 && meta.srcPort > 0 && from_host) {
+                if (hdr.udp.isValid()) {
+                   random_drop(99);
+                } 
+            }
+*/
 
             random_early_detection();
             
