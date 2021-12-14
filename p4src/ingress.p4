@@ -150,7 +150,8 @@ control MyIngress(inout headers hdr,
                     meta.srcPort, // This can be either TCP or UDP port
                     meta.dstPort, // This can be either TCP or UDP port
                     hdr.rexford_ipv4.protocol,
-                    meta.flowlet_id // For UDP this is actually the only necessary one.
+                    meta.flowlet_id, // For UDP this is actually the only necessary one.
+                    std_meta.ingress_port
                 },
 	            num_nhops);
 

@@ -191,7 +191,7 @@ class Fast_Recovery_Manager(object):
             failures (list(tuple(str, str))): List of failed links.
 
         Returns:
-            tuple(dict, dict): First dict: distances, second: paths.
+            tuple(dict, dict): First dict: distances (delay in ms), second: paths.
         """
         if failures is not None:
             graph = graph.copy()
@@ -394,40 +394,6 @@ class Fast_Recovery_Manager(object):
             for failures in data["failures"]:
                 all_failures.append(Fast_Recovery_Manager.parse_failures(failures))
         return all_failures
-    
-    @staticmethod
-    def distance_to_rtt(distance):
-        """Returns rtt in ms given a distance
-
-        All based in the following:
-        https://hpbn.co/primer-on-latency-and-bandwidth/
-        https://wondernetwork.com/pings
-
-        Each 250km 5ms RTT. This has been verfied with real pings and distance
-        measurements. 
-
-        For this we divide the distance by 250km and round to the closest value.
-
-        Less or equal to 250km -> 5ms
-        500km  -> 10ms
-        750km  -> 15ms
-        1000km -> 20ms
-        1250km -> 25ms
-        1500km -> 30ms
-        1750km -> 35ms
-        2000km -> 40ms
-        2000km+ -> 50ms
-        """
-
-        # compute times 250
-        if distance == 250 or distance < 250:
-            return 5
-        elif distance > 2000:
-            return 50
-        else:
-            _times_250 = round(distance/250)
-            #_times_250 = math.ceil(distance/250)
-            return _times_250 * 5  # 5ms per 250km
 
     @staticmethod
     def compute_scmps(lfas: Dict[str, Dict[str, List[str]]], distances: Dict[str, Dict[str, int]], threshold: int = 5) -> Dict[str, Dict[str, List[str]]]:
@@ -445,8 +411,14 @@ class Fast_Recovery_Manager(object):
         for src, dests in lfas.items():
             scmps[src] = {}
             for dst, lfas in dests.items():
-                shortest_path_length = distances[src][dst]
-                scmps[src][dst] = [lfa for lfa in lfas if (Fast_Recovery_Manager.distance_to_rtt(distances[src][lfa] + distances[lfa][dst] - shortest_path_length) / 2) < threshold]
+                delay_shortest = distances[src][dst]
+                def is_cheap_enough(lfa):
+                    delay_scmp = distances[src][lfa] + distances[lfa][dst]
+                    print(f"{src} - {dst}: {delay_shortest} {delay_scmp}")
+                    diff = (delay_scmp - delay_shortest)
+                    return (diff < threshold)
+                scmp_hops = [lfa for lfa in lfas if is_cheap_enough(lfa)]
+                scmps[src][dst] = scmp_hops
         return scmps
 
 
