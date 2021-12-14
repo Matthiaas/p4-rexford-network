@@ -76,7 +76,7 @@ class Fast_Recovery_Manager(object):
         #transform delay from string to float
         for e in g.edges:
             try:
-                g[e[0]][e[1]]['delay_w'] = float(g[e[0]][e[1]]['delay'].replace('ms',''))
+                g[e[0]][e[1]]['delay_w'] = float(g[e[0]][e[1]]['delay'].replace('ms','')) + 15.0
             except:
                 g[e[0]][e[1]]['delay_w'] = float(1.0)
     
@@ -211,8 +211,6 @@ class Fast_Recovery_Manager(object):
             for h in graph.get_hosts().keys():
                 # add only path with different first hop
                 all_paths = [path for path in all_shortest_paths(graph, sw, h, 'delay_w')]
-                if (sw == 'LIS' and h == 'MAD_h0'):
-                    print("ALL SH PATHS", all_paths)
                 nexthops = set()
                 ecmps = []
                 for path in all_paths:
@@ -255,8 +253,6 @@ class Fast_Recovery_Manager(object):
             for host in hosts:
                 try:
                     paths = shortest_paths[switch][host]
-                    if (switch == 'LIS' and host == 'MAD_h0'):
-                        print("SHORTEST PATHS", paths)
                 except KeyError:
                     print("WARNING: The graph is not connected!")
                     print("'%s' cannot reach '%s'." % (switch, host))
@@ -421,7 +417,7 @@ class Fast_Recovery_Manager(object):
                 delay_shortest = distances[src][dst]
                 def is_cheap_enough(lfa):
                     delay_scmp = distances[src][lfa] + distances[lfa][dst]
-                    print(f"{src} - {dst}: {delay_shortest} {delay_scmp}")
+                    #print(f"{src} - {dst}: {delay_shortest} {delay_scmp}")
                     diff = (delay_scmp - delay_shortest)
                     return (diff < threshold)
                 scmp_hops = [lfa for lfa in lfas if is_cheap_enough(lfa)]
@@ -455,6 +451,8 @@ class Fast_Recovery_Manager(object):
                     lfa = ""
                     scmp = []
                 routing_tbl[sw][host] = {"nexthops":this_nexthops, "lfa":lfa, "scmps": scmp}
+                if host == 'LIS_h0' and sw == 'FRA':
+                    print(routing_tbl[sw][host])
         scenario = {"failures": [Fast_Recovery_Manager.edge_to_string(x) for x in failures],\
                             "routing_tbl": routing_tbl,\
                             "Rlfas": Rlfas}
@@ -486,7 +484,9 @@ class Fast_Recovery_Manager(object):
                     lfa = []
                     scmp = []
                 routing_tbl[encode_vertex(sw)][encode_vertex(host)] = {"n":[encode_vertex(v) for v in this_nexthops], "l":lfa, "s": scmp}
-
+                if sw == 'FRA' and host == 'LIS_h0':
+                    print("NH", this_nexthops)
+                    print("RT", routing_tbl[encode_vertex(sw)][encode_vertex(host)])
         Rlfas_enc = {encode_vertex(k): {encode_vertex(e_k): encode_vertex(e_v) for e_k, e_v in e.items()} for k, e in Rlfas.items()}
         scenario = {"f": [encode_edge(x) for x in failures],\
                             "t": routing_tbl,\
@@ -582,7 +582,6 @@ def main(argv, argc):
     else:
         all_failures = Fast_Recovery_Manager.load_failures(failure_path)
     Fast_Recovery_Manager.add_delay_weight(graph)
-    print(graph.edges)
     Fast_Recovery_Manager.precompute_routing(graph, graph.get_p4switches().keys(), graph.get_hosts().keys(), all_failures)
 
 
