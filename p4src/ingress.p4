@@ -21,7 +21,7 @@ control MyIngress(inout headers hdr,
 
 
     // This is filled by the controller and uses the port_bytes_out information for it.
-    register<bit<32>>(MAX_PORTS) estimated_queue_len;
+    register<bit<32>>(MAX_PORTS) counter_based_estimated_queue_len;
 
     // port -> last seen timestamp for rec/sent packet
     register<bit<48>>(MAX_PORTS) recv_timestamp;
@@ -29,7 +29,6 @@ control MyIngress(inout headers hdr,
 
     // port(link) -> 0(OK) | 1(FAIL)
     register<bit<1>>(MAX_PORTS) linkState;
-    register<bit<1>>(MAX_PORTS) debug;
 
 
     action random_drop(in bit<32> p) {
@@ -151,7 +150,8 @@ control MyIngress(inout headers hdr,
                     meta.srcPort, // This can be either TCP or UDP port
                     meta.dstPort, // This can be either TCP or UDP port
                     hdr.rexford_ipv4.protocol,
-                    meta.flowlet_id // For UDP this is actually the only necessary one.
+                    meta.flowlet_id, // For UDP this is actually the only necessary one.
+                    std_meta.ingress_port
                 },
 	            num_nhops);
 
@@ -199,7 +199,6 @@ control MyIngress(inout headers hdr,
         //check the status of nexthop link and decide wt to use lfa or rlfa
         check_linkState(std_meta.egress_spec);
         if (meta.linkState == 1){
-            //debug.write((bit<32>)1,(bit<1>)1);
             //nexthop link down -> protect...
             //using lfa
             if (meta.lfa != 0){
@@ -268,16 +267,19 @@ control MyIngress(inout headers hdr,
         res = (val << 3) + (val << 1);
     }
 
-    action drop_based_on_queue_length_and_traffic_class() {
+    // This performs RED. If a certain queue length (=7) is reached we start dropping packets with 
+    // The probability min(100, (queue_length-7) * 5) in percent.
+    action random_early_detection() {
         bit<32> queueLen;
-        estimated_queue_len.read(queueLen, (bit<32>) std_meta.egress_spec);
-        bit<32> queueLen2;
-        estimated_queue_len_v2.read(queueLen2, (bit<32>) std_meta.egress_spec);
-        if(queueLen2 > queueLen) {
-            queueLen = queueLen2;
+        counter_based_estimated_queue_len.read(queueLen, (bit<32>) std_meta.egress_spec);
+        bit<32> meterBasedQueueLen;
+        meter_based_estimated_queue_len.read(meterBasedQueueLen, (bit<32>) std_meta.egress_spec);
+
+        // The maximum of both estimates leads to a good estimate of the actual queue length.
+        if(meterBasedQueueLen > queueLen) {
+            queueLen = meterBasedQueueLen;
         }
         
-        // This line for whatever reason lets the compiler give up.
        bit<32> dropProbability = 0;
         if(!hdr.tcp.isValid() && !hdr.udp.isValid()) {
             // Internal traffic like heartbeats. --> Never drop them.
@@ -298,24 +300,31 @@ control MyIngress(inout headers hdr,
         random_drop(dropProbability);
     }
 
-    action update_queue_length_estimate_v2() {
+    action update_meter_based_queue_length_estimate() {
         @atomic {
             bit<32> queueLen = 0;
-            estimated_queue_len_v2.read(queueLen, (bit<32>) hdr.heartbeat.port);
+            meter_based_estimated_queue_len.read(queueLen, (bit<32>) hdr.heartbeat.port);
+            // This is called every 1.2 ms so decrease the queue length by one.
             if(queueLen >= 1) {
                 queueLen = queueLen - 1;
             }
-            if(queueLen >= 1) {
-                queueLen = queueLen - 1;
-            }
-            estimated_queue_len_v2.write((bit<32>) hdr.heartbeat.port, queueLen);
+            meter_based_estimated_queue_len.write((bit<32>) hdr.heartbeat.port, queueLen);
         }
+    }
+
+    action notify_controller(in bit<9> port, in bit<1> failed_link, in bit<1> recovered_link ) {
+        meta.hb_port = port;
+        meta.hb_failed_link = failed_link;
+        meta.hb_recovered_link = recovered_link;
+        log_msg("HB Ingress: port {} f {} r {}",{meta.hb_port, meta.hb_failed_link, meta.hb_recovered_link});
+        clone3(CloneType.I2E, 100, meta);
     }
 
     apply {
         if (hdr.heartbeat.isValid()){
             if (hdr.heartbeat.from_cp == 1){
-                update_queue_length_estimate_v2();
+                // Update the queue length estimation every 1.2ms (The heartbeat_freq in settings.json)
+                update_meter_based_queue_length_estimate();
                 // From cont -> check last rec timestamp
                 get_recv_timestamp_for_port(hdr.heartbeat.port);
                 if (meta.timestamp != 0 && (std_meta.ingress_global_timestamp - meta.timestamp > THRESHOLD_REC)){
@@ -324,15 +333,7 @@ control MyIngress(inout headers hdr,
                     //if not already failed
                     if (meta.linkState != 1){
                         fail_linkState(hdr.heartbeat.port);
-                        meta.hb_port = hdr.heartbeat.port;
-                        meta.hb_failed_link = 1;
-                        meta.hb_recovered_link = 0;
-                        log_msg("HB Ingress: port {} f {} r {}",{meta.hb_port, meta.hb_failed_link, meta.hb_recovered_link});
-                        clone3(CloneType.I2E, 100, meta); //this yields a compilation error due to a bug in their src code
-                        //meta.digest.port = (bit<8>)hdr.heartbeat.port;
-                        //meta.digest.failed = (bit<8>)1;
-                        //meta.digest.recovered = (bit<8>)0;
-                        //digest<digest_t>(1, meta.digest);
+                        notify_controller(hdr.heartbeat.port, 1, 0);
                     }
                 }
                 //check last time we sent something to this port
@@ -351,15 +352,7 @@ control MyIngress(inout headers hdr,
                 check_linkState(std_meta.ingress_port);
                 if (meta.linkState == 1){
                     recover_linkState(std_meta.ingress_port);
-                    meta.hb_port = std_meta.ingress_port;
-                    meta.hb_failed_link = 0;
-                    meta.hb_recovered_link = 1;
-                    log_msg("HB Ingress: port {} f {} r {}",{meta.hb_port, meta.hb_failed_link, meta.hb_recovered_link});
-                    clone3(CloneType.I2E, 100, meta);
-                    //meta.digest.port = (bit<8>)std_meta.ingress_port;
-                    //meta.digest.failed = (bit<8>)0;
-                    //meta.digest.recovered = (bit<8>)1;
-                    //digest<digest_t>(1, meta.digest);
+                    notify_controller(std_meta.ingress_port, 0, 1);
                 }
                 meta.drop_packet = true;
             }
@@ -373,14 +366,7 @@ control MyIngress(inout headers hdr,
             if (meta.linkState == 1){
                 recover_linkState(std_meta.ingress_port);
                 log_msg("Recovered with normal traffic");
-                meta.hb_port = std_meta.ingress_port;
-                meta.hb_failed_link = 0;
-                meta.hb_recovered_link = 1;
-                clone3(CloneType.I2E, 100, meta);
-                //meta.digest.port = (bit<8>)std_meta.ingress_port;
-                //meta.digest.failed = (bit<8>)0;
-                //meta.digest.recovered = (bit<8>)1;
-                //digest<digest_t>(1, meta.digest);
+                notify_controller(std_meta.ingress_port, 0, 1);
             }
             meta.drop_packet = false;
 
@@ -395,7 +381,6 @@ control MyIngress(inout headers hdr,
 
             // first thing first, check if packet is protected
             if (hdr.rexford_ipv4.isValid()){
-                //debug.write((bit<32>)0,(bit<1>)1);
                 if (hdr.rexford_ipv4.rlfa_protected == 1){
                     if (hdr.rexford_ipv4.dstAddr == host_addr){
                         // reached rlfa -> set real destination
@@ -406,7 +391,6 @@ control MyIngress(inout headers hdr,
             }
 
             if (hdr.waypoint.isValid()){
-                //debug.write((bit<32>)1,(bit<1>)1);
                 if (hdr.waypoint.rlfa_protected == 1){
                     if (hdr.waypoint.waypoint == host_addr){
                         // reached rlfa -> set real destination
@@ -437,7 +421,6 @@ control MyIngress(inout headers hdr,
                 // Packet comes from host and is not waypointed, or just reached the waypoint here.
                 // Only consider packets that come from a host that are not waypointed.
                 // This is because waypointed traffic is not allowed to change the headers to be recognized by the tests.
-                debug.write((bit<32>)2,(bit<1>)1);
                 construct_rexford_headers();
             }
 
@@ -478,7 +461,7 @@ control MyIngress(inout headers hdr,
             //check nexthop status and in case route using the lfa or rlfa
             final_forward.apply();
 
-            drop_based_on_queue_length_and_traffic_class();
+            random_early_detection();
             
             if(!meta.drop_packet) {
                 // This applies the meter. 
@@ -491,6 +474,7 @@ control MyIngress(inout headers hdr,
                 bit<2> congestion_tag;
                 port_congestion_meter.execute_meter((bit<32>) std_meta.egress_spec, congestion_tag);
                 if(congestion_tag == V1MODEL_METER_COLOR_YELLOW) {
+                    // This is the TCP Global sync protection.
                     if(hdr.tcp.isValid()) {
                         bit<1> dropped_flowlet;
                         flowlet_dropped.read(dropped_flowlet, (bit<32>)meta.flowlet_register_index);

@@ -16,10 +16,10 @@
 #define REGISTER_SIZE 8192
 #define FLOWLET_TIMEOUT 48w200000 // 0.2s
 #define DROP_FLOWLET_TIMEOUT 48w100000 // 0.1s
-#define MAX_SCMP_SPLITS 3
+#define MAX_SCMP_SPLITS 1
 
 // Globals:
-register<bit<32>>(MAX_PORTS) estimated_queue_len_v2;
+register<bit<32>>(MAX_PORTS) meter_based_estimated_queue_len;
 
 #include "ingress.p4"
 #include "egress.p4"

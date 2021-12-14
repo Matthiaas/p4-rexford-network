@@ -29,7 +29,7 @@ control MyEgress(inout headers hdr,
             This only provides this invariant:
                 Meter x hits read ---implies---> Queue length is at least x
 
-            In order to get an even better estimate we only update the estimated_queue_len_v2
+            In order to get an even better estimate we only update the meter_based_estimated_queue_len
             if the current estimate is smaller than the new one (because of our invariant). 
             To decrease the queue length estimate we decrease the counter whenever we receive 
             a heartbeat from the controller by one for every 1.2ms that have passed.
@@ -77,11 +77,11 @@ control MyEgress(inout headers hdr,
 
         @atomic {
             bit<32> oldQueueLen = 0;
-            estimated_queue_len_v2.read(oldQueueLen, (bit<32>) std_meta.egress_port);
+            meter_based_estimated_queue_len.read(oldQueueLen, (bit<32>) std_meta.egress_port);
             if(oldQueueLen > queueLen) {
                 queueLen = oldQueueLen;
             }
-            estimated_queue_len_v2.write((bit<32>) std_meta.egress_port, queueLen);
+            meter_based_estimated_queue_len.write((bit<32>) std_meta.egress_port, queueLen);
         }
         
     }
