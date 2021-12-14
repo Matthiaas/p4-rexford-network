@@ -33,7 +33,12 @@ class Fast_Recovery_Manager(object):
     def add_delay_weight(g: Graph):
         #transform delay from string to float
         for e in g.edges:
-            g[e]['delay_w'] = float(g[e]['delay'].replace('ms',''))
+            print("edge", )
+            try:
+                g[e[0]][e[1]]['delay_w'] = float(g[e[0]][e[1]]['delay'].replace('ms',''))
+            except:
+                g[e[0]][e[1]]['delay_w'] = float(1.0)
+        print("GRAPH", g.edges)
     
     @staticmethod
     def parse_failures(failures: List[str]) -> List[Tuple[str, str]]:
@@ -166,6 +171,8 @@ class Fast_Recovery_Manager(object):
             for h in graph.get_hosts().keys():
                 # add only path with different first hop
                 all_paths = [path for path in all_shortest_paths(graph, sw, h, 'delay_w')]
+                if (sw == 'LIS' and h == 'MAD_h0'):
+                    print("ALL SH PATHS", all_paths)
                 nexthops = set()
                 ecmps = []
                 for path in all_paths:
@@ -208,6 +215,8 @@ class Fast_Recovery_Manager(object):
             for host in hosts:
                 try:
                     paths = shortest_paths[switch][host]
+                    if (switch == 'LIS' and host == 'MAD_h0'):
+                        print("SHORTEST PATHS", paths)
                 except KeyError:
                     print("WARNING: The graph is not connected!")
                     print("'%s' cannot reach '%s'." % (switch, host))
@@ -501,6 +510,8 @@ def main(argv, argc):
         all_failures = [[]]
     else:
         all_failures = Fast_Recovery_Manager.load_failures(failure_path)
+    Fast_Recovery_Manager.add_delay_weight(graph)
+    print(graph.edges)
     Fast_Recovery_Manager.precompute_routing(graph, graph.get_p4switches().keys(), graph.get_hosts().keys(), all_failures)
 
 

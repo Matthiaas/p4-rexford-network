@@ -24,6 +24,7 @@ class Controller(object):
         
         self.base_traffic_file = base_traffic
         self.topo = load_topo('topology.json')
+        FRM.add_delay_weight(self.topo)
         self.controllers = {}
         self.failed_links = set() #current set of failed links
         path = sys.argv[0]
@@ -142,6 +143,7 @@ class Controller(object):
             red = (peak_rate, 40 * packet_size)
             controller.meter_array_set_rates("queue_len_40", [yellow, red])
         self.global_interface_lock.release()
+
 
     def connect_to_switches(self):
         """Connects to switches"""
