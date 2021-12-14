@@ -60,8 +60,8 @@ control MyIngress(inout headers hdr,
     action fail_linkState(bit<9> port){
         linkState.write((bit<32>)port, (bit<1>)1);
     }
-    action check_linkState(bit<9> port){
-        linkState.read(meta.linkState, (bit<32>)port);
+    action check_linkState(out bit<1> result, bit<9> port){
+        linkState.read(result, (bit<32>)port);
     }
     action recover_linkState(bit<9> port){
         linkState.write((bit<32>)port, (bit<1>)0);
@@ -197,19 +197,23 @@ control MyIngress(inout headers hdr,
     action set_nexthop_lfa_rlfa(rexfordAddr_t rlfa_host, egressSpec_t rlfa_port){
         //to be called after ipv4_forward
         //check the status of nexthop link and decide wt to use lfa or rlfa
-        check_linkState(std_meta.egress_spec);
-        if (meta.linkState == 1){
+        bit<1> link_down;
+        bit<1> lfa_down;
+        bit<1> rlfa_down;
+        check_linkState(link_down, std_meta.egress_spec);
+        check_linkState(link_down, std_meta.egress_spec);
+        check_linkState(link_down, std_meta.egress_spec);
+
+        if (link_down == 1){
             //nexthop link down -> protect...
             //using lfa
-            check_linkState(meta.lfa);
-            if (meta.lfa != 0 && meta.linkState != 1){
+            if (meta.lfa != 0 && lfa_down != 1){
                 std_meta.egress_spec = meta.lfa;
             }
             //using rlfa
             else if (rlfa_port != 0){
                 std_meta.egress_spec = rlfa_port;
-                check_linkState(rlfa_port);
-                if (meta.lnkState == 1){
+                if (rlfa_down == 1){
                     meta.drop_packet = true;
                 }
                 else if (hdr.rexford_ipv4.isValid()){
@@ -334,9 +338,10 @@ control MyIngress(inout headers hdr,
                 get_recv_timestamp_for_port(hdr.heartbeat.port);
                 if (meta.timestamp != 0 && (std_meta.ingress_global_timestamp - meta.timestamp > THRESHOLD_REC)){
                     //Update linkstate -> notify cont
-                    check_linkState(hdr.heartbeat.port);
+                    bit<1> linkStatus;
+                    check_linkState(linkStatus, hdr.heartbeat.port);
                     //if not already failed
-                    if (meta.linkState != 1){
+                    if (linkStatus != 1){
                         fail_linkState(hdr.heartbeat.port);
                         notify_controller(hdr.heartbeat.port, 1, 0);
                     }
@@ -354,8 +359,9 @@ control MyIngress(inout headers hdr,
             } else {
                 // From neigh -> update last seen timestamp
                 set_recv_timestamp_for_port(std_meta.ingress_port);
-                check_linkState(std_meta.ingress_port);
-                if (meta.linkState == 1){
+                bit<1> linkStatus;
+                check_linkState(linkStatus, std_meta.ingress_port);
+                if (linkStatus == 1){
                     recover_linkState(std_meta.ingress_port);
                     notify_controller(std_meta.ingress_port, 0, 1);
                 }
@@ -367,8 +373,9 @@ control MyIngress(inout headers hdr,
         } else {
             //Normal traffic
             set_recv_timestamp_for_port(std_meta.ingress_port);
-            check_linkState(std_meta.ingress_port);
-            if (meta.linkState == 1){
+            bit<1> linkStatus;
+            check_linkState(linkStatus, std_meta.ingress_port);
+            if (linkStatus == 1){
                 recover_linkState(std_meta.ingress_port);
                 log_msg("Recovered with normal traffic");
                 notify_controller(std_meta.ingress_port, 0, 1);
