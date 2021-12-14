@@ -11,8 +11,12 @@
 #define MAX_PORTS 11 //max index is 10
 //#define THRESHOLD 48w1000000 // 1s
 //hb frequency from controller = 0.12s
-#define THRESHOLD_REC 48w156000 // 0.30s -> if we don't see traffic for more than > fail
-#define THRESHOLD_SENT 48w48000 // 0.24s -> if we haven't seen traffic for more than > send
+
+// 150ms -> if we don't see traffic for more than > fail
+#define THRESHOLD_REC 48w156000 
+
+// 48ms -> if we haven't seen traffic for more than > send
+#define THRESHOLD_SENT 48w48000 
 #define REGISTER_SIZE 8192
 #define FLOWLET_TIMEOUT 48w20000 // 0.02s
 #define DROP_FLOWLET_TIMEOUT 48w100000 // 0.1s
@@ -30,10 +34,10 @@ register<bit<32>>(MAX_PORTS) meter_based_estimated_queue_len;
 
 //switch architecture
 V1Switch(
-    MyParser(),
-    MyVerifyChecksum(),
-    MyIngress(),
-    MyEgress(),
-    MyComputeChecksum(),
-    MyDeparser()
+  MyParser(),
+  MyVerifyChecksum(),
+  MyIngress(),
+  MyEgress(),
+  MyComputeChecksum(),
+  MyDeparser()
 ) main;
