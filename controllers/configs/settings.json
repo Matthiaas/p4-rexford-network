@@ -9,5 +9,5 @@
     "queue_len_estimator_sample_freq":  0.0001,
     "use_edge_delay":                   false,
     "scmp_threshold":                   0,
-    "switch_delay":                     10000
+    "switch_delay":                     0
 }

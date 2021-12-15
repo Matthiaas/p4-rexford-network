@@ -4,7 +4,7 @@ from p4utils.utils.sswitch_thrift_API import SimpleSwitchThriftAPI
 from multiprocessing.pool import ThreadPool
 from recovery import Fast_Recovery_Manager as FRM
 from heartbeat import HeartBeatGenerator as HBG
-from queuelengthestimator import QueueLengthEstimator 
+from queuelengthestimator import QueueLengthEstimator
 from routingtablemanager import RoutingTableManager
 from rexfordutils import RexfordUtils
 import json
@@ -15,50 +15,55 @@ import time
 import way_point_reader as wpr
 from errors import *
 
-#define here table names
+# define here table names
 TABLES = ["ipv4_forward", "escmp_group_to_nhop", "final_forward"]
 
-class Controller(object):
 
+class Controller(object):
     def __init__(self, base_traffic, slas):
-        
+
         self.base_traffic_file = base_traffic
-        self.topo = load_topo('topology.json')
+        self.topo = load_topo("topology.json")
         FRM.add_delay_weight(self.topo)
         self.controllers = {}
-        self.failed_links = set() #current set of failed links
+        self.failed_links = set()  # current set of failed links
         path = sys.argv[0]
-        self.base_path  = "/".join(path.split("/")[:-1])
+        self.base_path = "/".join(path.split("/")[:-1])
         self.global_interface_lock = threading.Lock()
         self.recovery_manager = FRM(
-            self.topo, self.base_path + "/configs/link_failure_map_generated.json")
+            self.topo, self.base_path + "/configs/link_failure_map_generated.json"
+        )
         # Settings:
         self.settings = self.read_settings(self.base_path + "/configs/settings.json")
         self.hb_manager = HBG(self.settings["heartbeat_freq"], self.topo)
-        self.qle = QueueLengthEstimator(self.settings["queue_len_estimator_sample_freq"], 
-                self.controllers, self.global_interface_lock)
-        self.rt_manager = RoutingTableManager(self.settings["rt_manager_freq"],
-                self.controllers, self.topo, self.recovery_manager, self.global_interface_lock)
-        
-        #self.workers = ThreadPool(16) # One worker for each thread
+        self.qle = QueueLengthEstimator(
+            self.settings["queue_len_estimator_sample_freq"],
+            self.controllers,
+            self.global_interface_lock,
+        )
+        self.rt_manager = RoutingTableManager(
+            self.settings["rt_manager_freq"],
+            self.controllers,
+            self.topo,
+            self.recovery_manager,
+            self.global_interface_lock,
+        )
+
+        # self.workers = ThreadPool(16) # One worker for each thread
         self.init()
 
-
     def read_settings(self, settings_filename):
-         with open(settings_filename, 'r') as f:
+        with open(settings_filename, "r") as f:
             return json.load(f)
-
 
     def init(self):
         """Basic initialization. Connects to switches and resets state."""
         self.connect_to_switches()
         self.reset_states()
 
-
     def reset_states(self):
         """Resets switches state"""
         [controller.reset_state() for controller in self.controllers.values()]
-
 
     def get_port_and_mac_of_host(self, switch_name):
         """Gets the port through which switch connects to host and host mac"""
@@ -67,25 +72,25 @@ class Controller(object):
         host_mac = self.topo.node_to_node_mac(host_name, switch_name)
         return str(host_port), host_mac
 
-
     def configure_host_port(self, p4switch):
         """Configure host port value in the p4 parser and adds table entry for reconstructing packets"""
         host_port, host_mac = self.get_port_and_mac_of_host(p4switch)
         cont = self.controllers[p4switch]
         cont.pvs_add("MyParser.host_port", host_port)
         cont.table_add(
-            "host_port_to_mac", action_name="reconstruct_packet", 
-            match_keys=[host_port], action_params=[host_mac])
+            "host_port_to_mac",
+            action_name="reconstruct_packet",
+            match_keys=[host_port],
+            action_params=[host_mac],
+        )
         cont.register_write("host_port_reg", 0, int(host_port))
 
-
     def configure_host_address(self, p4switch):
-        """ Saves the host rexford address into register in p4"""
+        """Saves the host rexford address into register in p4"""
         host_name = p4switch + "_h0"
         host_addr = RexfordUtils.get_rexford_addr(self.topo, host_name)
         cont = self.controllers[p4switch]
         cont.register_write("host_address_reg", 0, int(host_addr))
-
 
     def setup_way_points(self, way_point_file_name):
         self.global_interface_lock.acquire()
@@ -98,10 +103,13 @@ class Controller(object):
             print(str(dst_addr))
             print(str(wp_addr))
             self.controllers[src_switch].table_add(
-                "udp_waypoint", action_name="set_waypoint", 
-                match_keys=[dst_addr], action_params=[wp_addr])
+                "udp_waypoint",
+                action_name="set_waypoint",
+                match_keys=[dst_addr],
+                action_params=[wp_addr],
+            )
         self.global_interface_lock.release()
-                
+
     def setup_meters(self):
         committed_queue_length = self.settings["committed_queue_length"]
         committed_rate = self.settings["committed_rate"]
@@ -113,10 +121,12 @@ class Controller(object):
 
         self.global_interface_lock.acquire()
         for controller in self.controllers.values():
-            cir =  committed_rate                        # committed information rate [bytes/s]
-            cbs =  committed_queue_length * packet_size  # committed burst size       [bytes]
-            pir =  peak_rate                             # peak information rate     [bytes/s]
-            pbs =  peak_queue_length * packet_size       # peak burst size           [bytes]
+            cir = committed_rate  # committed information rate [bytes/s]
+            cbs = (
+                committed_queue_length * packet_size
+            )  # committed burst size       [bytes]
+            pir = peak_rate  # peak information rate     [bytes/s]
+            pbs = peak_queue_length * packet_size  # peak burst size           [bytes]
             yellow = (cir, cbs)
             red = (pir, pbs)
             controller.meter_array_set_rates("port_congestion_meter", [yellow, red])
@@ -149,13 +159,11 @@ class Controller(object):
             controller.meter_array_set_rates("queue_len_40", [yellow, red])
         self.global_interface_lock.release()
 
-
     def connect_to_switches(self):
         """Connects to switches"""
         for p4switch in self.topo.get_p4switches():
             thrift_port = self.topo.get_thrift_port(p4switch)
             self.controllers[p4switch] = SimpleSwitchThriftAPI(thrift_port)
-
 
     def set_mirroring_sessions(self):
         """Set mirroring sessions for cloned packets"""
@@ -165,18 +173,17 @@ class Controller(object):
             self.controllers[p4switch].mirroring_add(100, cpu_port)
         self.global_interface_lock.release()
 
-
     def process_packet(self, pkt):
         """Processes received packets to detect failure notifications"""
         interface = pkt.sniffed_on
         switch_name = interface.split("-")[0]
         pkt_raw = raw(pkt)
-        pkt_bin = format(int.from_bytes(pkt_raw, byteorder='big'), '0112b')
+        pkt_bin = format(int.from_bytes(pkt_raw, byteorder="big"), "0112b")
         eth_type = int(pkt_bin[-16:], 2)
         if eth_type == 4661:
-            port = int(pkt_bin[0:9],2)
-            failed = int(pkt_bin[10],2)
-            recovered = int(pkt_bin[11],2)
+            port = int(pkt_bin[0:9], 2)
+            failed = int(pkt_bin[10], 2)
+            recovered = int(pkt_bin[11], 2)
             neighbor = self.topo.port_to_node(switch_name, port)
             failed_link = tuple(sorted([switch_name, neighbor]))
             print(f"[!] Heartbeat: {switch_name} {neighbor} {port}")
@@ -187,13 +194,16 @@ class Controller(object):
                 print("Notification for link restored {} received", format(failed_link))
                 self.rt_manager.restore_link(failed_link)
 
-
     def run_cpu_port_loop(self):
         """Sniffs traffic coming from switches"""
-        cpu_interfaces = [str(self.topo.get_ctl_cpu_intf(sw_name)).replace('eth1','eth0') for sw_name in self.controllers]
+        cpu_interfaces = [
+            str(self.topo.get_ctl_cpu_intf(sw_name)).replace("eth1", "eth0")
+            for sw_name in self.controllers
+        ]
         print(f"Sniffing interfaces: {cpu_interfaces}")
-        sniff(iface=cpu_interfaces, filter="ether proto 0x1235", prn=self.process_packet)
-
+        sniff(
+            iface=cpu_interfaces, filter="ether proto 0x1235", prn=self.process_packet
+        )
 
     def run(self):
         """Run function"""
@@ -206,14 +216,13 @@ class Controller(object):
         self.rt_manager.run()
 
         self.qle.run()
-        #start thread for listening heartbeats
+        # start thread for listening heartbeats
         self.set_mirroring_sessions()
-        t = threading.Thread(target = self.run_cpu_port_loop, daemon=True)
+        t = threading.Thread(target=self.run_cpu_port_loop, daemon=True)
         t.start()
-        #start heartbeat traffic
+        # start heartbeat traffic
         self.hb_manager.run()
         time.sleep(1000)
-
 
     def main(self):
         """Main function"""
@@ -222,10 +231,16 @@ class Controller(object):
 
 def get_args():
     parser = argparse.ArgumentParser()
-    parser.add_argument('--base-traffic', help='Path to scenario.base-traffic',
-    type=str, required=False, default='')
-    parser.add_argument('--slas', help='Path to scenario.slas',
-    type=str, required=False, default='') 
+    parser.add_argument(
+        "--base-traffic",
+        help="Path to scenario.base-traffic",
+        type=str,
+        required=False,
+        default="",
+    )
+    parser.add_argument(
+        "--slas", help="Path to scenario.slas", type=str, required=False, default=""
+    )
     return parser.parse_args()
 
 

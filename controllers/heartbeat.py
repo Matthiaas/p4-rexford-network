@@ -11,6 +11,7 @@ import time
 import threading
 from multiprocessing.pool import ThreadPool
 
+
 class HeartBeatGenerator(object):
     """Heart beat Generator."""
 
@@ -21,18 +22,16 @@ class HeartBeatGenerator(object):
         self.time_interval = time_interval
         self.workers = ThreadPool(16)
 
-
     def __build_packet(self, heartbeat_port):
         """Builds raw heart beat packet to send to switches"""
-        heartbeat_port = format(heartbeat_port, '09b')
-        from_control_plane = '1'
-        pad = '0' * 86
-        eth = format(0x1234, '016b')
+        heartbeat_port = format(heartbeat_port, "09b")
+        from_control_plane = "1"
+        pad = "0" * 86
+        eth = format(0x1234, "016b")
         pkt = heartbeat_port + from_control_plane + pad + eth
-        pkt = int(pkt, 2).to_bytes(14, byteorder='big')
+        pkt = int(pkt, 2).to_bytes(14, byteorder="big")
         heartbeat = struct.pack("!14s", pkt)
         return heartbeat
-
 
     def __send_thread(self, intf_name, neighs_ports):
         """Periodically sends one packet to `intf_name` every `time_interval`"""
@@ -60,7 +59,9 @@ class HeartBeatGenerator(object):
                 neighs_ports.append(sw_port)
             interface = self.topo.get_ctl_cpu_intf(switch)
             # Give every beat its on thread so they are send more accurately in the time_interval.
-            t = threading.Thread(target=self.__send_thread, args=(interface, neighs_ports), daemon=True)
+            t = threading.Thread(
+                target=self.__send_thread, args=(interface, neighs_ports), daemon=True
+            )
             t.start()
             all_neighs.append(neighs_ports)
         print("Started all heartbeat sending threads.")
