@@ -13,7 +13,7 @@
 
 We implement dynamic failure aware routing and support routing table
 calculations using either delay or number of hops as a weight metric.
-To avoid congestion a switches use local load-balancing by means of flowlets
+To avoid congestion switches use local load-balancing by means of flowlets
 and Equal Cost Multi-Path (ECMP).
 We also implemented Similar Cost Paths (SCMP) to distribute the load even
 further over the network.
@@ -22,13 +22,13 @@ To handle congestion in the network, the switches will use Random Earlier
 Detection and drop packets and avoid TCP synchronisation.
 This is based on a queue length estimator using meters and counters that
 approximates the queue length of each link behind the switch.
-We also implement and additional
+We also implement additional
 [Global synchronization protection](https://www.researchgate.net/publication/301857331_Global_Synchronization_Protection_for_Bandwidth_Sharing_TCP_Flows_in_High-Speed_Links).
 
 
 Since the network is small, we can precompute all possible failures and
 according routing tables ahead of time.
-However, computing all possible failures requirers a lot of storage (>1GB).
+However, computing all possible failures requires a lot of storage (>1GB).
 We thus only precompute common failure scenarios and compute the others at
 runtime if necessary.
 
