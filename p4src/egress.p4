@@ -162,7 +162,7 @@ control MyEgress(inout headers hdr,
       hdr.heartbeat.etherType = 0x1235;
     }
     else{
-      hdr.heartbeat.from_cp = 0;
+      hdr.heartbeat.from_control_plane = 0;
       port_bytes_out.count((bit<32>) std_meta.egress_port);
       estimate_queue_len_v2();
     }

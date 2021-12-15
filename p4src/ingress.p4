@@ -281,9 +281,12 @@ control MyIngress(inout headers hdr,
 
   // Actions for the main Ingress pipeline:
 
-  /* Sets the tcp/ udp ports to the fields in the metadata.
+  /* Setup fields in the meta.
+   * Also get basic variables that are needed in the ingress.
    */
-  action set_meta_ports() {
+  action init(out rexfordAddr_t host_addr, 
+                   out bit<9> host_port, out bool from_host) {
+    meta.drop_packet = false;
     if (hdr.tcp.isValid()) {
       meta.srcPort = hdr.tcp.srcPort;
       meta.dstPort = hdr.tcp.dstPort;
@@ -291,6 +294,10 @@ control MyIngress(inout headers hdr,
       meta.srcPort = hdr.udp.srcPort;
       meta.dstPort = hdr.udp.dstPort;
     } 
+
+    host_address_reg.read(host_addr, 0);
+    host_port_reg.read(host_port, 0);
+    from_host = host_port == std_meta.ingress_port;
   }
 
   /* This removes the ethernet header and destructs the ip header into a more
@@ -402,38 +409,38 @@ control MyIngress(inout headers hdr,
 
   apply {
     if (hdr.heartbeat.isValid()){
-      if (hdr.heartbeat.from_cp == 1){
+      if (hdr.heartbeat.from_control_plane == 1){
         // Update the queue length estimation every 1.2ms 
         // (The heartbeat_freq in settings.json)
         update_meter_based_queue_length_estimate();
-        // From cont -> check last rec timestamp
         get_recv_timestamp_for_port(hdr.heartbeat.port);
         if (meta.timestamp != 0 &&
             (std_meta.ingress_global_timestamp - meta.timestamp > THRESHOLD_REC)){
-          //Update linkstate -> notify cont
           bit<1> linkStatus;
           check_linkState(linkStatus, hdr.heartbeat.port);
-          //if not already failed
           if (linkStatus != 1){
+            // Only notify if it was not failed already.
             fail_linkState(hdr.heartbeat.port);
             notify_controller(hdr.heartbeat.port, 1, 0);
           }
         }
-        //check last time we sent something to this port
+        // Check last time we sent something to this port.
         get_sent_timestamp_for_port(hdr.heartbeat.port); 
         if (std_meta.ingress_global_timestamp - meta.timestamp > THRESHOLD_SENT){
-          //Send heartbeat to port
+          //Send heartbeat to port if we did not send anything within 
+          // THRESHOLD_SENT.
           set_sent_timestamp_for_port(hdr.heartbeat.port);
           std_meta.egress_spec = hdr.heartbeat.port;
         } else {
-          // no need to forward the heartbeat -> drop
+          // No need to forward the heartbeat.
           meta.drop_packet = true;
         }
       } else {
-        // From neigh -> update last seen timestamp
+        // From neighbor. Update last seen timestamp.
         set_recv_timestamp_for_port(std_meta.ingress_port);
         bit<1> linkStatus;
         check_linkState(linkStatus, std_meta.ingress_port);
+        // If the link was previously down notify the controller to recover it.
         if (linkStatus == 1){
           recover_linkState(std_meta.ingress_port);
           notify_controller(std_meta.ingress_port, 0, 1);
@@ -443,9 +450,10 @@ control MyIngress(inout headers hdr,
       if (meta.drop_packet == true){
         mark_to_drop(std_meta);
       }
-    } else { //Normal traffic
+    } else {
+      //Normal traffic
 
-      // Lazy heartbeat
+      // Process the packet as a lazy heartbeat.
       set_recv_timestamp_for_port(std_meta.ingress_port);
       bit<1> linkStatus;
       check_linkState(linkStatus, std_meta.ingress_port);
@@ -454,19 +462,16 @@ control MyIngress(inout headers hdr,
         log_msg("Recovered with normal traffic");
         notify_controller(std_meta.ingress_port, 0, 1);
       }
+      
 
-      meta.drop_packet = false;
-
-      // Read the address and port of the host.
+      // Read the address and port of the host and initialize variables.
       rexfordAddr_t host_addr;
       bit<9> host_port;
       bool from_host;
+      init(host_addr, host_port, from_host);
 
-      host_address_reg.read(host_addr, 0);
-      host_port_reg.read(host_port, 0);
-      from_host = host_port == std_meta.ingress_port;
 
-      // first thing first, check if packet is protected using Rlfa
+      // Check if a packet is protected (needs to be sent to a RLFA).
       if (hdr.rexford_ipv4.isValid()){
         if (hdr.rexford_ipv4.rlfa_protected == 1){
           if (hdr.rexford_ipv4.dstAddr == host_addr){
@@ -485,10 +490,7 @@ control MyIngress(inout headers hdr,
           }
         }
       }
-
-      set_meta_ports();
-
-      
+     
       if(from_host && hdr.udp.isValid()) {
         // Maybe setup waypoint if packet comes from host.
         meta.next_destination = (bit<4>) hdr.ipv4.dst_rexford_addr;   
@@ -555,7 +557,7 @@ control MyIngress(inout headers hdr,
           escmp_group_to_nhop.apply();
         }
       }
-      //check nexthop status and in case route using the lfa or rlfa
+      // check nexthop status and in case route using the lfa or rlfa.
       final_forward.apply();
 
       // This is some code that does arbitrary dropping to optimize for 
