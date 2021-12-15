@@ -329,7 +329,7 @@ control MyIngress(inout headers hdr,
   *  It also drops additional traffic (port range [60001,65000]) right 
   *  the moment a queue starts building up. This prioritizes any other traffic 
   *  in the network over it. This is fine here since we know this traffic is 
-  *  only upd, does not burst, and only sends at a constant rate. 
+  *  only udp, does not burst, and only sends at a constant rate. 
   */
   action random_early_detection() {
     bit<32> queueLen;
@@ -443,8 +443,9 @@ control MyIngress(inout headers hdr,
       if (meta.drop_packet == true){
         mark_to_drop(std_meta);
       }
-    } else {
-      //Normal traffic
+    } else { //Normal traffic
+
+      // Lazy heartbeat
       set_recv_timestamp_for_port(std_meta.ingress_port);
       bit<1> linkStatus;
       check_linkState(linkStatus, std_meta.ingress_port);
@@ -453,6 +454,7 @@ control MyIngress(inout headers hdr,
         log_msg("Recovered with normal traffic");
         notify_controller(std_meta.ingress_port, 0, 1);
       }
+
       meta.drop_packet = false;
 
       // Read the address and port of the host.
@@ -464,7 +466,7 @@ control MyIngress(inout headers hdr,
       host_port_reg.read(host_port, 0);
       from_host = host_port == std_meta.ingress_port;
 
-      // first thing first, check if packet is protected
+      // first thing first, check if packet is protected using Rlfa
       if (hdr.rexford_ipv4.isValid()){
         if (hdr.rexford_ipv4.rlfa_protected == 1){
           if (hdr.rexford_ipv4.dstAddr == host_addr){
@@ -474,11 +476,10 @@ control MyIngress(inout headers hdr,
           }
         }
       }
-
       if (hdr.waypoint.isValid()){
         if (hdr.waypoint.rlfa_protected == 1){
           if (hdr.waypoint.waypoint == host_addr){
-            // reached rlfa -> set real destination
+            // reached rlfa -> set real destination (i.e waypoint)
             hdr.waypoint.waypoint = hdr.waypoint.original_dstAddr;
             hdr.waypoint.rlfa_protected = 0;
           }
