@@ -1,6 +1,7 @@
 """ Define classes and methods for links failure recovery here"""
 from networkx.algorithms import all_pairs_dijkstra, bridges
 from networkx.algorithms.shortest_paths.generic import shortest_path,all_shortest_paths, shortest_path_length
+from networkx.algorithms.shortest_paths.weighted import all_pairs_dijkstra_path_length
 from p4utils.utils.topology import NetworkGraph as Graph
 from p4utils.utils.helper import load_topo
 from scapy.all import *
@@ -194,7 +195,7 @@ class Fast_Recovery_Manager(object):
             failures (list(tuple(str, str))): List of failed links.
 
         Returns:
-            tuple(dict, dict): First dict: distances (delay in ms), second: paths.
+            tuple(dict, dict): First dict: costs (delay in ms), second: paths.
         """
         if failures is not None:
             graph = graph.copy()
@@ -202,10 +203,8 @@ class Fast_Recovery_Manager(object):
                 graph.remove_edge(*failure)
 
         paths = {}
-        distances = {}
         for sw in graph.get_p4switches().keys():
             paths[sw] = {}
-            distances[sw] = {}
             d = {}
             p = {}
             for h in graph.get_hosts().keys():
@@ -218,17 +217,8 @@ class Fast_Recovery_Manager(object):
                         nexthops.add(path[1])
                         ecmps.append(path)
                 paths[sw][h] = ecmps
-                #if len(paths[sw][h]) > 1:
-                    #print(f"ECMP PATH {sw}->{h}\nNexthops:\n")
-                    #for path in paths[sw][h]:
-                    #    print("-"+path[1]+"\n")
-                distances[sw][h] = shortest_path_length(graph, sw, h, 'delay_w')
-            #add distances between switches
-            for sw2 in graph.get_p4switches().keys():
-                if sw == sw2:
-                    continue
-                distances[sw][sw2] = shortest_path_length(graph, sw2, h, 'delay_w')
-        return distances, paths
+        costs = dict(all_pairs_dijkstra_path_length(graph, weight='delay_w'))
+        return costs, paths
 
     @staticmethod
     def compute_nexthops(shortest_paths, switches, hosts, failures=None):
