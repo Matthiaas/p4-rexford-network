@@ -12,6 +12,7 @@ const bit<16> ETHER_TYPE_INTERNAL = 0x823;
 // This is the same as the real Ipv4 ether type on purpose
 const bit<16> ETHER_TYPE_INTERNAL_WAYPOINT = 0x800;
 const bit<16> ETHER_TYPE_HEARTBEAT = 0x1234;
+const bit<16> ETHER_TYPE_NOTIFY_CONTROL_PLANE = 0x1235;
 
 const bit<8> TCP_PROTOCOL = 6;
 const bit<8> UDP_PROTOCOL = 17;

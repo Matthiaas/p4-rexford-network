@@ -159,7 +159,7 @@ control MyEgress(inout headers hdr,
       hdr.heartbeat.failed_link = meta.hb_failed_link;
       hdr.heartbeat.recovered_link = meta.hb_recovered_link;
       hdr.heartbeat.port = meta.hb_port;
-      hdr.heartbeat.etherType = 0x1235;
+      hdr.heartbeat.etherType = ETHER_TYPE_NOTIFY_CONTROL_PLANE;
     }
     else{
       hdr.heartbeat.from_control_plane = 0;

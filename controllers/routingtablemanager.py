@@ -186,14 +186,21 @@ class RoutingTableManager(object):
                     print(
                         f"Adding Rlfa link {p4switch}--{neigh} rlfa: {rlfa} port: {rlfa_port}"
                     )
-                # Decoy rlfa is 0.
-                self.__modify_or_add(
-                    cont=cont,
-                    table_name="final_forward",
-                    action_name="set_backup_rts",
-                    match_keys=[str(link_port)],
-                    action_params=[rlfa_host, str(rlfa_port)],
-                )
+                    self.__modify_or_add(
+                        cont=cont,
+                        table_name="final_forward",
+                        action_name="set_backup_routs",
+                        match_keys=[str(link_port)],
+                        action_params=[rlfa_host, str(rlfa_port)],
+                    )
+                else:
+                    self.__modify_or_add(
+                        cont=cont,
+                        table_name="final_forward",
+                        action_name="set_backup_routs_no_rlfa",
+                        match_keys=[str(link_port)],
+                        action_params=[],
+                    )
 
             print("Loaded routing tables for ", p4switch)
 
