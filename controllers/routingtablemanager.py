@@ -126,6 +126,7 @@ class RoutingTableManager(object):
             for neigh, rlfa in Rlfas[p4switch].items():
                 # Rlfa protects the link sw--neigh
                 rlfa_port = 0
+                rlfa_host = "0"
                 if rlfa != "":
                     # This is the port to protect
                     link_port = self.topo.node_to_node_port_num(p4switch, neigh)
