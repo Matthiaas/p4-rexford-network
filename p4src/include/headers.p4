@@ -40,7 +40,6 @@ struct metadata {
   rexfordAddr_t next_destination;
   
   // Heartbeat and fail management stuff
-  bit<1> linkState; //OK | FAIL
   bit<48> timestamp; //placeholder for reading last seen timestamp
 
   //placeholders for cloning
@@ -59,7 +58,8 @@ struct metadata {
   bit<16> flowlet_id;
 
   // If there is no LFA this is 0.
-  egressSpec_t lfa;
+  egressSpec_t lfa_port_1;
+  egressSpec_t lfa_port_2;
 
   // Dropping a packet is done by setting this flag.
   // The end of the Ingress pipeline will check for that flag and then drop the 

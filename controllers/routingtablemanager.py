@@ -61,36 +61,51 @@ class RoutingTableManager(object):
 
 
     def update_all_routing_tables(self, routing_tables, Rlfas, init=False): 
-        def update_singel_routing_table(p4switch):    
+        
+        #Helper
+        def update_single_routing_table(p4switch):    
             cont = self.controllers[p4switch]            
             rt = routing_tables[p4switch]
             ecmp_group_id = 0
+            
             print("Loading routing tables for ", p4switch)
+            
             for host_name, routs in rt.items():
                 host_addr = RexfordUtils.get_rexford_addr(self.topo, host_name)               
+                
+                nexthops = routs["nexthops"]
+                scmp_nexthops = routs.get("scmps", [])
+
                 nexthopports = [ 
                     str(self.topo.node_to_node_port_num(p4switch, nexthop)) 
-                        for nexthop in routs["nexthops"]]
+                        for nexthop in nexthops]
                 scmp_nexthopports = [
                     str(self.topo.node_to_node_port_num(p4switch, nexthop))
-                        for nexthop in routs.get("scmps", [])]
+                        for nexthop in scmp_nexthops]
+                
                 nexthop_escmp_ports = nexthopports + [p for p in scmp_nexthopports if p not in nexthopports]
 
-
                 lfa = routs["lfa"]
-                lfa_port = None
-                if lfa != "":
-                    lfa_port = str(self.topo.node_to_node_port_num(p4switch, lfa))                 
+                lfa_ports = None
+                # Normalize the lfa list to be at most of len 2
+                if len(lfa) > 0:
+                    lfa_ports = [str(self.topo.node_to_node_port_num(p4switch, l)) for l in lfa]
+                    if len(lfa_ports) == 1:
+                        lfa_ports.append(str(0))
+                else:
+                    lfa_ports = [str(0), str(0)]
                 
-                print("Adding nexthops and lfa:")
-                print([nexthop_escmp_ports, lfa_port])
+               
+                print("Adding nexthops,lfas and rlfas:")
+                print([nexthop_escmp_ports, lfa_ports])
             
                 if len(nexthop_escmp_ports) == 1:
                     # We only need to set the nexthop and not any ESCP stuff.
-                    self.__add_set_next_hop(cont, "ipv4_forward", 
+                    self.__set_next_hop_lfas(cont, "ipv4_forward", 
                             match_keys=[host_addr], 
-                            next_port=nexthop_escmp_ports[0], 
-                            lfa_port=lfa_port, init=init)
+                            next_port=nexthop_escmp_ports[0],
+                            lfa_ports=lfa_ports,
+                            init=init)
                 else:
                     self.__modify_or_add(cont=cont,
                             table_name="ipv4_forward", 
@@ -99,18 +114,19 @@ class RoutingTableManager(object):
                             action_params=[str(ecmp_group_id), str(len(nexthopports)), str(len(nexthop_escmp_ports))])
                     port_hash = 0
                     for nextport in nexthop_escmp_ports:
-                        # Why are we setting lfa if ecmp?
-                        self.__add_set_next_hop(cont, "escmp_group_to_nhop", 
+                        self.__set_next_hop_lfas(cont, "escmp_group_to_nhop", 
                             match_keys=[str(ecmp_group_id), str(port_hash)], 
-                            next_port=nextport, 
-                            lfa_port=lfa_port,
+                            next_port=nextport,
+                            lfa_ports=lfa_ports, 
                             init=init)
                         port_hash = port_hash + 1 
                     ecmp_group_id = ecmp_group_id + 1
                 
             #set Rlfas
             for neigh, rlfa in Rlfas[p4switch].items():
+                # Rlfa protects the link sw--neigh 
                 if rlfa != "":
+                    # This is the port to protect
                     link_port = self.topo.node_to_node_port_num(p4switch, neigh)
                     # Get nexthop for getting to the rlfa.
                     rlfa_host = RexfordUtils.get_rexford_addr(
@@ -121,36 +137,36 @@ class RoutingTableManager(object):
                         # Clearly has to be different than the neighbor for which the link fails.
                         if nh != neigh:
                             rlfa_port = self.topo.node_to_node_port_num(p4switch, nh)
+                            break
                     print(f"Adding Rlfa link {p4switch}--{neigh} rlfa: {rlfa} port: {rlfa_port}")
                     self.__modify_or_add(cont=cont,
                             table_name="final_forward",
-                            action_name="set_nexthop_lfa_rlfa",
+                            action_name="set_backup_rts",
                             match_keys=[str(link_port)],
                             action_params=[rlfa_host, str(rlfa_port)])
+            
             print("Loaded routing tables for ", p4switch)
                            
-        self.workers.map(update_singel_routing_table, self.topo.get_p4switches())
+        self.workers.map(update_single_routing_table, self.topo.get_p4switches())
 
     def __modify_or_add(self, cont, table_name, action_name, match_keys, action_params=[], init=False):
-            entry_handle = None
-            if not init:
-                # No need to try to update the entry when we init.
-                entry_handle = cont.get_handle_from_match(table_name, match_keys)
-            if entry_handle is not None:
-                cont.table_modify(table_name, action_name, entry_handle, action_params)
-            else:
-                cont.table_add(table_name, action_name, match_keys, action_params)
+        
+        entry_handle = None
+        if not init:
+            # No need to try to update the entry when we init.
+            entry_handle = cont.get_handle_from_match(table_name, match_keys)
+        if entry_handle is not None:
+            cont.table_modify(table_name, action_name, entry_handle, action_params)
+        else:
+            cont.table_add(table_name, action_name, match_keys, action_params)
 
     # Maps refxord addr or ecmp group to nexthop port and lfa if possible.
-    def __add_set_next_hop(self, cont, table_name, match_keys, next_port, lfa_port=None, init=False):
-        if lfa_port:
-            self.__modify_or_add(cont=cont,
-                table_name=table_name, action_name="set_nhop_and_lfa", 
-                    match_keys=match_keys, action_params=[next_port, lfa_port])
-        else:
-            self.__modify_or_add(cont=cont,
-                table_name=table_name, action_name="set_nhop", 
-                    match_keys=match_keys, action_params=[next_port])
+    def __set_next_hop_lfas(self, cont, table_name, match_keys, next_port, lfa_ports, init=False):
+        lfa_port_1 = lfa_ports[0]
+        lfa_port_2 = lfa_ports[1]
+        self.__modify_or_add(cont=cont,
+            table_name=table_name, action_name="set_nhop_lfas", 
+                match_keys=match_keys, action_params=[next_port, lfa_port_1, lfa_port_2], init=init)
 
     def run(self):
         """Main runner"""

@@ -445,15 +445,14 @@ class Fast_Recovery_Manager(object):
             routing_tbl[sw] = {}
             for host, this_nexthops in nexthops[sw]:
                 try:
-                    lfa = lfas[sw][host][0]
+                    lfa = lfas[sw][host][:2]
                     scmp = sim_cost_paths[sw][host]
                 except:
                     #no lfa
-                    lfa = ""
+                    lfa = []
                     scmp = []
                 routing_tbl[sw][host] = {"nexthops":this_nexthops, "lfa":lfa, "scmps": scmp}
-                if host == 'LIS_h0' and sw == 'FRA':
-                    print(routing_tbl[sw][host])
+                
         scenario = {"failures": [Fast_Recovery_Manager.edge_to_string(x) for x in failures],\
                             "routing_tbl": routing_tbl,\
                             "Rlfas": Rlfas}
@@ -478,7 +477,7 @@ class Fast_Recovery_Manager(object):
             routing_tbl[encode_vertex(sw)] = {}
             for host, this_nexthops in nexthops[sw]:
                 try:
-                    lfa = [encode_vertex(lfas[sw][host][0])]
+                    lfa = [encode_vertex(l) for l in lfas[sw][host][:2]]
                     scmp = [encode_vertex(x) for x in sim_cost_paths[sw][host]]
                 except:
                     #no lfa
@@ -502,9 +501,9 @@ class Fast_Recovery_Manager(object):
                     host = decode_vertex(h)
                     this_nexthops = [decode_vertex(v) for v in entry["n"]]
                     if entry["l"]:
-                        lfa = decode_vertex(entry['l'][0])
+                        lfa = [decode_vertex(l) for l in entry['l']]
                     else:
-                        lfa = ''
+                        lfa = []
                     scmps = [decode_vertex(s) for s in entry["s"]]
                     rt[sw][host] = {"nexthops":this_nexthops, "lfa":lfa, "scmps": scmps}
         except KeyError as err:
