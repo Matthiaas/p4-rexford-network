@@ -18,7 +18,7 @@ and Equal Cost Multi-Path (ECMP).
 We also implemented Similar Cost Paths (SCMP) to distribute the load even
 further over the network.
 
-To handle congestion in the network, the switches will use Random Earlier
+To handle congestion in the network, the switches will use Random Early
 Detection and drop packets and avoid TCP synchronisation.
 This is based on a queue length estimator using meters and counters that
 approximates the queue length of each link behind the switch.
