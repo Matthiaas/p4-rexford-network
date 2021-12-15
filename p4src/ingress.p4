@@ -175,8 +175,8 @@ control MyIngress(inout headers hdr,
   }
 
   /*  This table for every destination tells in which escmp_group you are or
-   *  if there is only one entry in the group it directly calls set_nhop_lfas to set
-   *  the next hop. 
+   *  if there is only one entry in the group it directly calls set_nhop_lfas to 
+   *  set the next hop. 
    */
   table ipv4_forward {
     key = { meta.next_destination : exact; }
@@ -217,12 +217,13 @@ control MyIngress(inout headers hdr,
     default_action = NoAction();
   }
 
-  /* TODO:
+  /* Receive a packet which has the egress port set to nexthop and
+   * meta.lfa_port_1 and meta.lfa_port_2 set.
+   * Check if up and reroute in case. This follows a per-link logic since it has 
+   * to set up rlfas.
+   * LFA ports and rlfa_port is set to zero if there is none existing.
    */
-  action set_backup_rts(egressSpec_t rlfa_port, rexfordAddr_t rlfa_host){
-    // receive a packet which has the egress port set to nexthop and meta.lfa_port_X set 
-    // -> check if up and reroute in case. This follows a per-link logic since has to set up rlfass
-    
+  action set_backup_routs(egressSpec_t rlfa_port, rexfordAddr_t rlfa_host){   
     bit<1> link_down;
     bit<1> lfa_1_down;
     bit<1> lfa_2_down;
@@ -233,8 +234,8 @@ control MyIngress(inout headers hdr,
     check_linkState(rlfa_down, rlfa_port);
 
     if (link_down == 1){
-      //nexthop link down -> protect...
-      //using lfa
+      // Nexthop link is down.
+      // Try to used lfa_port_1, lfa_port_2 and then the rlfa.
       if (meta.lfa_port_1 != 0 && lfa_1_down != 1){
         std_meta.egress_spec = meta.lfa_port_1;
       }
@@ -260,19 +261,28 @@ control MyIngress(inout headers hdr,
       }
     }
   }
-    /*
-    This table applies the last final logic. It presumes the packet has already the egress
-    port set to the right next hop for the dest, and lfas ports already set if any.
-    
-    It loads the Rlfa for the link we are going to use (if any) and checks if the nexthop link is
-    still up. Otherwise, it will try the lfas first and then the Rlfa
-    */
+
+  action set_backup_routs_no_rlfa() {
+    // Port 0 describes a not valid RLFA.
+    set_backup_routs(0, 0);
+  }
+
+  /*
+   * This table applies the last final logic. It presumes the packet has already 
+   * the egress port set to the right next hop for the dest, and lfas ports 
+   * already set if any. 
+   *
+   * It loads the Rlfa for the link we are going to use (if any) and checks if 
+   * the nexthop link is still up. Otherwise, it will try the lfas first and 
+   * then the Rlfa.
+  */
   table final_forward{
     key = {
         std_meta.egress_spec: exact;
         }
     actions = {
-      set_backup_rts;
+      set_backup_routs;
+      set_backup_routs_no_rlfa;
       NoAction;
     }
     size = MAX_PORTS;
@@ -285,7 +295,7 @@ control MyIngress(inout headers hdr,
    * Also get basic variables that are needed in the ingress.
    */
   action init(out rexfordAddr_t host_addr, 
-                   out bit<9> host_port, out bool from_host) {
+              out bit<9> host_port, out bool from_host) {
     meta.drop_packet = false;
     if (hdr.tcp.isValid()) {
       meta.srcPort = hdr.tcp.srcPort;
@@ -403,7 +413,8 @@ control MyIngress(inout headers hdr,
     meta.hb_port = port;
     meta.hb_failed_link = failed_link;
     meta.hb_recovered_link = recovered_link;
-    log_msg("HB Ingress: port {} f {} r {}",{meta.hb_port, meta.hb_failed_link, meta.hb_recovered_link});
+    log_msg("HB Ingress: port {} f {} r {}",
+        {meta.hb_port, meta.hb_failed_link, meta.hb_recovered_link});
     clone3(CloneType.I2E, 100, meta);
   }
 
