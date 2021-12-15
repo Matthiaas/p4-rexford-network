@@ -123,23 +123,15 @@ control MyIngress(inout headers hdr,
   // Actions for table escmp_group_to_nhop:
 
 
-  /*  Sets the egress port to the nexthop port.
-   */
-  action set_nhop(egressSpec_t port) {
+  /*  
+    Sets the egress port to the nexthop port and loads lfas into meta. -> per destination logic
+  */
+  action set_nhop_lfas(egressSpec_t port, egressSpec_t lfa_port_1, egressSpec_t lfa_port_2) {
     std_meta.egress_spec = port;
-    // This means there is no lfa.
-    meta.lfa = 0;
+    meta.lfa_port_1 = lfa_port_1;
+    meta.lfa_port_2 = lfa_port_2;
   }
 
-  /*  TODO: Remove this method francesso
-   */
-  action set_nhop_and_lfa(egressSpec_t port, egressSpec_t lfa) {
-    std_meta.egress_spec = port;
-    meta.lfa = lfa;
-  }
-
-  /*  TODO: Floris
-   */
   table escmp_group_to_nhop {
     key = {
       meta.escmp_group_id:    exact;
@@ -147,8 +139,7 @@ control MyIngress(inout headers hdr,
     }
     actions = {
       drop;
-      set_nhop;
-      set_nhop_and_lfa;
+      set_nhop_lfas;
     }
     size = 1024;
   }
@@ -184,14 +175,13 @@ control MyIngress(inout headers hdr,
   }
 
   /*  This table for every destination tells in which escmp_group you are or
-   *  if there is only one entry in the group it directly calls set_nhop to set
+   *  if there is only one entry in the group it directly calls set_nhop_lfas to set
    *  the next hop. 
    */
   table ipv4_forward {
     key = { meta.next_destination : exact; }
     actions =  {
-      set_nhop;
-      set_nhop_and_lfa;
+      set_nhop_lfas;
       escmp_group;
       drop;
     }
@@ -229,48 +219,60 @@ control MyIngress(inout headers hdr,
 
   /* TODO:
    */
-  action set_nexthop_lfa_rlfa(rexfordAddr_t rlfa_host, egressSpec_t rlfa_port){
-    //to be called after ipv4_forward
-    //check the status of nexthop link and decide wt to use lfa or rlfa
+  action set_backup_rts(egressSpec_t rlfa_port, rexfordAddr_t rlfa_host){
+    // receive a packet which has the egress port set to nexthop and meta.lfa_port_X set 
+    // -> check if up and reroute in case. This follows a per-link logic since has to set up rlfass
+    
     bit<1> link_down;
-    bit<1> lfa_down;
+    bit<1> lfa_1_down;
+    bit<1> lfa_2_down;
     bit<1> rlfa_down;
     check_linkState(link_down, std_meta.egress_spec);
-    check_linkState(link_down, std_meta.egress_spec);
-    check_linkState(link_down, std_meta.egress_spec);
+    check_linkState(lfa_1_down, meta.lfa_port_1);
+    check_linkState(lfa_2_down, meta.lfa_port_2);
+    check_linkState(rlfa_down, rlfa_port);
 
     if (link_down == 1){
       //nexthop link down -> protect...
       //using lfa
-      if (meta.lfa != 0 && lfa_down != 1){
-        std_meta.egress_spec = meta.lfa;
+      if (meta.lfa_port_1 != 0 && lfa_1_down != 1){
+        std_meta.egress_spec = meta.lfa_port_1;
       }
-      //using rlfa
-      else if (rlfa_port != 0){
-        std_meta.egress_spec = rlfa_port;
-        if (rlfa_down == 1){
+      else if (meta.lfa_port_2 != 0 && lfa_2_down != 1){
+        std_meta.egress_spec = meta.lfa_port_2;
+      }
+      else if (rlfa_port != 0 && rlfa_down != 1){
+          std_meta.egress_spec = rlfa_port;
+          
+          if (hdr.rexford_ipv4.isValid()){
+            hdr.rexford_ipv4.original_dstAddr = meta.next_destination;
+            hdr.rexford_ipv4.dstAddr = rlfa_host;
+            hdr.rexford_ipv4.rlfa_protected = 1;
+          }
+          else if (hdr.waypoint.isValid()){
+            hdr.waypoint.original_dstAddr = meta.next_destination;
+            hdr.waypoint.waypoint = rlfa_host;
+            hdr.waypoint.rlfa_protected = 1;
+          }
+      }
+      else{
           meta.drop_packet = true;
-        }
-        else if (hdr.rexford_ipv4.isValid()){
-          hdr.rexford_ipv4.original_dstAddr = meta.next_destination;
-          hdr.rexford_ipv4.dstAddr = rlfa_host;
-          hdr.rexford_ipv4.rlfa_protected = 1;
-        }
-        else if (hdr.waypoint.isValid()){
-          hdr.waypoint.original_dstAddr = meta.next_destination;
-          hdr.waypoint.waypoint = rlfa_host;
-          hdr.waypoint.rlfa_protected = 1;
-        }
       }
     }
   }
-
-  /* TODO:
-   */
+    /*
+    This table applies the last final logic. It presumes the packet has already the egress
+    port set to the right next hop for the dest, and lfas ports already set if any.
+    
+    It loads the Rlfa for the link we are going to use (if any) and checks if the nexthop link is
+    still up. Otherwise, it will try the lfas first and then the Rlfa
+    */
   table final_forward{
-    key = {std_meta.egress_spec: exact;}
+    key = {
+        std_meta.egress_spec: exact;
+        }
     actions = {
-      set_nexthop_lfa_rlfa;
+      set_backup_rts;
       NoAction;
     }
     size = MAX_PORTS;
@@ -539,7 +541,7 @@ control MyIngress(inout headers hdr,
           if (flowlet_time_diff > FLOWLET_TIMEOUT){
             update_tcp_flowlet_id(flowlet_register_index);
           }
-
+            
           bit<48> flowlet_drop_time_diff = 
             std_meta.ingress_global_timestamp - flowlet_last_dropped_stamp;
           // If the drop is longer than DROP_FLOWLET_TIMEOUT ago, possibly allow 
