@@ -65,6 +65,6 @@ In this section, note down 1 or 2 sentences *per team member* outlining everyone
 - Waypointing for UDP waypointed traffic.
 - First version ECMP-flowlet routing
 - TCP Global Synchronization Protection based on this [paper](https://www.researchgate.net/publication/301857331_Global_Synchronization_Protection_for_Bandwidth_Sharing_TCP_Flows_in_High-Speed_Links)
-- Queue-length estimator
+- Meter and Counter based queue-length estimators
 - QOS with Random Early Detection based on priorities.
 
