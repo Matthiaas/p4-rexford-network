@@ -225,7 +225,7 @@ class Fast_Recovery_Manager(object):
         return costs, paths
 
     @staticmethod
-    def compute_nexthops(shortest_paths, switches, hosts, failures=None):
+    def compute_nexthops(shortest_paths, switches, hosts):
         """Compute the best nexthops for all switches to each host.
 
         Optionally, a link can be marked as failed. This link will be excluded
@@ -258,7 +258,7 @@ class Fast_Recovery_Manager(object):
         return results
 
     @staticmethod
-    def compute_lfas(graph: Graph, switches, hosts, costs, nexthops, failures=None):
+    def compute_lfas(graph: Graph, switches, hosts, costs, nexthops):
         """
         Compute per-destination LFA  for all nexthops.
         
@@ -300,7 +300,7 @@ class Fast_Recovery_Manager(object):
         return lfas
 
     @staticmethod
-    def compute_Rlfas(graph: Graph, switches, costs, nexthops, lfas, failures=None):
+    def compute_Rlfas(graph: Graph, switches, costs, nexthops, lfas):
         """
         Implements the PQ algorithm for Remote LFAs
          
@@ -429,10 +429,10 @@ class Fast_Recovery_Manager(object):
         
         #dijkstra handles removing the failed links here
         costs, shortest_paths = Fast_Recovery_Manager.dijkstra(graph, failures)
-        nexthops = Fast_Recovery_Manager.compute_nexthops(shortest_paths, switches, hosts, failures)
-        lfas = Fast_Recovery_Manager.compute_lfas(graph, switches, hosts, costs, nexthops, failures)
+        nexthops = Fast_Recovery_Manager.compute_nexthops(shortest_paths, switches, hosts)
+        lfas = Fast_Recovery_Manager.compute_lfas(graph, switches, hosts, costs, nexthops)
         sim_cost_paths = Fast_Recovery_Manager.compute_scmps(lfas, costs, SETTINGS["scmp_threshold"])
-        Rlfas = Fast_Recovery_Manager.compute_Rlfas(graph, switches, costs, nexthops, lfas, failures)
+        Rlfas = Fast_Recovery_Manager.compute_Rlfas(graph, switches, costs, nexthops, lfas)
         
         routing_tbl = {}
         for sw in switches:
@@ -461,10 +461,10 @@ class Fast_Recovery_Manager(object):
         
         #dijkstra handles removing the failed links here
         costs, shortest_paths = Fast_Recovery_Manager.dijkstra(graph, failures)
-        nexthops = Fast_Recovery_Manager.compute_nexthops(shortest_paths, switches, hosts, failures)
-        lfas = Fast_Recovery_Manager.compute_lfas(graph, switches, hosts, costs, nexthops, failures)
+        nexthops = Fast_Recovery_Manager.compute_nexthops(shortest_paths, switches, hosts)
+        lfas = Fast_Recovery_Manager.compute_lfas(graph, switches, hosts, costs, nexthops)
         sim_cost_paths = Fast_Recovery_Manager.compute_scmps(lfas, costs, SETTINGS["scmp_threshold"])
-        Rlfas = Fast_Recovery_Manager.compute_Rlfas(graph, switches, costs, nexthops, lfas, failures)
+        Rlfas = Fast_Recovery_Manager.compute_Rlfas(graph, switches, costs, nexthops, lfas)
         
         routing_tbl = {}
         for sw in switches:

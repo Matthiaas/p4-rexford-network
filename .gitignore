@@ -4,3 +4,4 @@ log/
 outputs/
 *.p4i
 switch.json
+topology.json

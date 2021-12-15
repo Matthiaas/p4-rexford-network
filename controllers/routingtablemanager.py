@@ -25,7 +25,10 @@ class RoutingTableManager(object):
         self.non_bridges = FRM.get_non_bridges(self.topo)
        
     def fail_link(self, failed_link):
-        """ """
+        """ 
+            Given a failed_link (notified from data plane), check if it is a valid entry to failures pool
+            Args: tuple(str,str)
+        """
         self.lock.acquire()
         if failed_link not in self.failed_links and failed_link in self.non_bridges:
             self.failed_links.add(failed_link)
@@ -34,6 +37,10 @@ class RoutingTableManager(object):
         self.lock.release()
 
     def restore_link(self, restored_link):
+        """
+            Given a failed_link (notified from data plane), check if it is in failed pool and removes it
+            Args: tuple(str,str)
+        """
         self.lock.acquire()
         if restored_link in self.failed_links:
             self.failed_links.remove(restored_link)
@@ -41,6 +48,10 @@ class RoutingTableManager(object):
         self.lock.release()
 
     def __check_changed(self):
+        """
+        To be called in a thread. Periodically checks if there has been a change in the failure pool
+        and loads/recompute routing tables.
+        """
         while True:
             self.lock.acquire()
             if self.has_changed:
@@ -59,7 +70,12 @@ class RoutingTableManager(object):
 
 
     def update_all_routing_tables(self, routing_tables, Rlfas, init=False): 
+        """
+            Updates all the routing tables by loading into switches tables.
+            Args:
+                routing_tables: 
         
+        """
         #Helper
         def update_single_routing_table(p4switch):    
             cont = self.controllers[p4switch]            

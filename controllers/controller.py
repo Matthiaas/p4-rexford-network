@@ -61,6 +61,7 @@ class Controller(object):
 
 
     def get_port_and_mac_of_host(self, switch_name):
+        """Gets the port through which switch connects to host and host mac"""
         host_name = switch_name + "_h0"
         host_port = self.topo.node_to_node_port_num(switch_name, host_name)
         host_mac = self.topo.node_to_node_mac(host_name, switch_name)
@@ -68,6 +69,7 @@ class Controller(object):
 
 
     def configure_host_port(self, p4switch):
+        """Configure host port value in the p4 parser and adds table entry for reconstructing packets"""
         host_port, host_mac = self.get_port_and_mac_of_host(p4switch)
         cont = self.controllers[p4switch]
         cont.pvs_add("MyParser.host_port", host_port)
@@ -78,6 +80,7 @@ class Controller(object):
 
 
     def configure_host_address(self, p4switch):
+        """ Saves the host rexford address into register in p4"""
         host_name = p4switch + "_h0"
         host_addr = RexfordUtils.get_rexford_addr(self.topo, host_name)
         cont = self.controllers[p4switch]
@@ -149,7 +152,6 @@ class Controller(object):
 
     def connect_to_switches(self):
         """Connects to switches"""
-        
         for p4switch in self.topo.get_p4switches():
             thrift_port = self.topo.get_thrift_port(p4switch)
             self.controllers[p4switch] = SimpleSwitchThriftAPI(thrift_port)
@@ -204,23 +206,12 @@ class Controller(object):
         self.rt_manager.run()
 
         self.qle.run()
-        #start heartbeat traffic
-
+        #start thread for listening heartbeats
         self.set_mirroring_sessions()
         t = threading.Thread(target = self.run_cpu_port_loop, daemon=True)
         t.start()
+        #start heartbeat traffic
         self.hb_manager.run()
-        # Configure mirroring session to cpu port for failure notifications
-        
-                
-        #switches = []
-        #controllers = []
-        #for entry in self.controllers.items():
-        #    switches.append(entry[0])
-        #    controllers.append(entry[1])
-        #self.dg_manager = DG(self.topo, switches, controllers, self.rt_manager)
-        #print("Starting DG manager")
-        #self.dg_manager.run()
         time.sleep(1000)
 
 
