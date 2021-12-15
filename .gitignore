@@ -3,3 +3,4 @@ __pycache__/
 log/
 outputs/
 *.p4i
+switch.json

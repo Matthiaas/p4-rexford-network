@@ -25,10 +25,8 @@ class RoutingTableManager(object):
         self.non_bridges = FRM.get_non_bridges(self.topo)
        
     def fail_link(self, failed_link):
+        """ """
         self.lock.acquire()
-        print(f"Checking failure validity for {failed_link}")
-        print(f"Not yet in failed_link? {failed_link not in self.failed_links}")
-        print(f"Is not a bridge? {failed_link in self.non_bridges}")
         if failed_link not in self.failed_links and failed_link in self.non_bridges:
             self.failed_links.add(failed_link)
             print(f"Updated failed links: {self.failed_links}")
@@ -127,9 +125,9 @@ class RoutingTableManager(object):
                 # Rlfa protects the link sw--neigh
                 rlfa_port = 0
                 rlfa_host = "0"
+                link_port = self.topo.node_to_node_port_num(p4switch, neigh)
                 if rlfa != "":
                     # This is the port to protect
-                    link_port = self.topo.node_to_node_port_num(p4switch, neigh)
                     # Get nexthop for getting to the rlfa.
                     rlfa_host = RexfordUtils.get_rexford_addr(
                         self.topo, RexfordUtils.get_host_of_switch(rlfa))
