@@ -75,9 +75,11 @@ control MyIngress(inout headers hdr,
 
   // Flowlet related actions:
 
-  action read_tcp_flowlet_registers(){
+  action read_tcp_flowlet_registers(
+      out bit<13> flowlet_register_index, 
+      out bit<48> flowlet_last_stamp, out bit<48> flowlet_last_dropped_stamp){
     //compute register index
-    hash(meta.flowlet_register_index, HashAlgorithm.crc16,
+    hash(flowlet_register_index, HashAlgorithm.crc16,
       (bit<16>)0,
       { 
         hdr.rexford_ipv4.srcAddr, 
@@ -90,16 +92,16 @@ control MyIngress(inout headers hdr,
 
     //Read previous time stamp
     flowlet_time_stamp.read(
-      meta.flowlet_last_stamp, (bit<32>)meta.flowlet_register_index);
+      flowlet_last_stamp, (bit<32>)flowlet_register_index);
     flowlet_last_drop_time_stamp.read(
-      meta.flowlet_last_dropped_stamp, (bit<32>)meta.flowlet_register_index);
+      flowlet_last_dropped_stamp, (bit<32>)flowlet_register_index);
 
     //Read previous flowlet id
-    flowlet_to_id.read(meta.flowlet_id, (bit<32>)meta.flowlet_register_index);
+    flowlet_to_id.read(meta.flowlet_id, (bit<32>)flowlet_register_index);
 
     //Update timestamp
     flowlet_time_stamp.write(
-      (bit<32>)meta.flowlet_register_index, std_meta.ingress_global_timestamp);
+      (bit<32>)flowlet_register_index, std_meta.ingress_global_timestamp);
   }
 
   action update_udp_flowlet_id(){
@@ -108,13 +110,13 @@ control MyIngress(inout headers hdr,
     meta.flowlet_id = (bit<16>)random_t;
   }
 
-  action update_tcp_flowlet_id(){
+  action update_tcp_flowlet_id(in bit<13> flowlet_register_index){
     bit<32> random_t;
     random(random_t, (bit<32>)0, (bit<32>)65000);
     meta.flowlet_id = (bit<16>)random_t;
     // Only make this permanent for TCP. The next UDP packet can go wherever.
     flowlet_to_id.write(
-      (bit<32>)meta.flowlet_register_index, (bit<16>)meta.flowlet_id);
+      (bit<32>)flowlet_register_index, (bit<16>)meta.flowlet_id);
     
   }
 
@@ -516,23 +518,29 @@ control MyIngress(inout headers hdr,
       }    
 
       // Flowlet ECMP & SCMP switching.
+      bit<13> flowlet_register_index = 0;
       @atomic {
         if (hdr.tcp.isValid()) {
-          read_tcp_flowlet_registers();
+
+          bit<48> flowlet_last_stamp;
+          bit<48> flowlet_last_dropped_stamp;
+          read_tcp_flowlet_registers(
+            flowlet_register_index, flowlet_last_stamp, 
+            flowlet_last_dropped_stamp);
 
           bit<48> flowlet_time_diff = 
-            std_meta.ingress_global_timestamp - meta.flowlet_last_stamp;
+            std_meta.ingress_global_timestamp - flowlet_last_stamp;
           //check if inter-packet gap is > FLOWLET_TIMEOUT
           if (flowlet_time_diff > FLOWLET_TIMEOUT){
-            update_tcp_flowlet_id();
+            update_tcp_flowlet_id(flowlet_register_index);
           }
 
           bit<48> flowlet_drop_time_diff = 
-            std_meta.ingress_global_timestamp - meta.flowlet_last_stamp;
+            std_meta.ingress_global_timestamp - flowlet_last_dropped_stamp;
           // If the drop is longer than DROP_FLOWLET_TIMEOUT ago, possibly allow 
           // a new drop on this flow.
-          if (meta.flowlet_last_dropped_stamp > DROP_FLOWLET_TIMEOUT) {
-            flowlet_dropped.write((bit<32>)meta.flowlet_register_index, 0);
+          if (flowlet_last_dropped_stamp > DROP_FLOWLET_TIMEOUT) {
+            flowlet_dropped.write((bit<32>)flowlet_register_index, 0);
           }
         } else {
           update_udp_flowlet_id();
@@ -553,7 +561,7 @@ control MyIngress(inout headers hdr,
       // 0% than 98% if the SLA is 99%.
       // Comment out this line when you want the thing to work for general
       // traffic.
-      // #include "leader_board_opt.p4"
+      //#include "leader_board_opt.p4"
 
       random_early_detection();
       
@@ -575,12 +583,12 @@ control MyIngress(inout headers hdr,
           if(hdr.tcp.isValid()) {
             bit<1> dropped_flowlet;
             flowlet_dropped.read(
-              dropped_flowlet, (bit<32>)meta.flowlet_register_index);
+              dropped_flowlet, (bit<32>)flowlet_register_index);
             if(dropped_flowlet == 0) {
               meta.drop_packet = true;
-              flowlet_dropped.write((bit<32>)meta.flowlet_register_index, 1);
+              flowlet_dropped.write((bit<32>)flowlet_register_index, 1);
               flowlet_last_drop_time_stamp.write(
-                (bit<32>)meta.flowlet_register_index, 
+                (bit<32>)flowlet_register_index, 
                 std_meta.ingress_global_timestamp);
             }
           }

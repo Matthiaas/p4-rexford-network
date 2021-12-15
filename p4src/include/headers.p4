@@ -13,11 +13,8 @@ const bit<16> ETHER_TYPE_INTERNAL = 0x823;
 const bit<16> ETHER_TYPE_INTERNAL_WAYPOINT = 0x800;
 const bit<16> ETHER_TYPE_HEARTBEAT = 0x1234;
 
-
 const bit<8> TCP_PROTOCOL = 6;
 const bit<8> UDP_PROTOCOL = 17;
-
-
 
 typedef bit<9>  egressSpec_t;
 typedef bit<48> macAddr_t;
@@ -58,20 +55,16 @@ struct metadata {
   bit<16> escmp_nhop_id;
   bit<14> escmp_group_id;
   bool    scmp_new_split;
-
-  bit<48> flowlet_last_stamp;
-  bit<48> flowlet_last_dropped_stamp;
   
-  bit<13> flowlet_register_index;
   bit<16> flowlet_id;
 
   // If there is no LFA this is 0.
   egressSpec_t lfa;
 
   // Dropping a packet is done by setting this flag.
-  // The end of the Ingress pipeline will check for that flag and then drop the traffic if set.
-  // This is required s.t. we wabt to be able drop a packet inside an if inside an action
-  // Which is not allowed on our platform.
+  // The end of the Ingress pipeline will check for that flag and then drop the 
+  // packet if set. This is required s.t. we want to be able drop a packet 
+  // inside an if inside an action which is not allowed on our platform.
   bool drop_packet;
 }
 
