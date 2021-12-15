@@ -146,7 +146,12 @@ control MyIngress(inout headers hdr,
 
   // Actions for table ipv4_forward:
 
-  /*  TODO: Floris
+  /*  Set the ECMP/SCMP next hop ID (which is then used to select the egress port).
+   *  SCMP paths are only used if the number of SCMP splits is smaller than MAX_SCMP_SPLITS (and they are available).  
+   *  Otherwise only ECMP is used.
+   *  args:
+   *    num_ecmp_nhops: Number of available ECMP next hops.
+   *    num_scmp_nhops: Number of available SCMP next hops (includes ECMP hops).
    */
   action escmp_group(bit<14> escmp_group_id, bit<16> num_ecmp_nhops, 
                      bit<16> num_scmp_nhops){
