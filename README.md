@@ -11,27 +11,37 @@
 
 ## Overview
 
-This project implements dynamic failure aware routing for the claranet network.
-We support routing table calculations using both delay and number of hops as a weight metric.
-To avoid congestion the switches use local load-balancing by means of flowlets and Equal Cost Multi-Path (ECMP).
-In addition to the equal cost paths we also allow the switches to use Similar Cost Paths (SCMP).
-This allows us to distribute the load even further over the network.
+We implement dynamic failure aware routing, supporting routing table 
+calculations using either delay or number of hops as a weight metric. 
+To avoid congestion a switches use local load-balancing by means of flowlets 
+and Equal Cost Multi-Path (ECMP).
+We also implemented Similar Cost Paths (SCMP) to distribute the load even 
+further over the network.
 
-Should this still not suffice to handle the incoming packets, the switches will start dropping select packets to stop congestion and avoid TCP synchronisation.
-To this end, we implement a queue length estimator using meters that approximates the congestion of each link.
+To handle congestion in the network, the switches will use Random Earlier 
+Detection and drop packets and avoid TCP synchronisation. 
+This is based on a queue length estimator using meters and counters that 
+approximates the queue length of each link behind the switch.
+We also implement and additional
+[Global synchronization protection](https://www.researchgate.net/publication/301857331_Global_Synchronization_Protection_for_Bandwidth_Sharing_TCP_Flows_in_High-Speed_Links).
 
-Furthermore, we put a lot of thought into failure detection and handling.
-Since the network is small, we can precompute all possible failures and according routing tables ahead of time.
-However, computing all possible failures will still take up a non-negligible amount of storage (>1GB).
-We thus only precompute common failure scenarios and compute the others at runtime if necessary.
 
-Failure detections work by sending heartbeats on all individual links.
-Because of the special properties of the links which penalize sending a lot of small packets we allow normal packets to also function as heartbeats.
-We thus only send heartbeats when there is no other traffic on the link.
+Since the network is small, we can precompute all possible failures and 
+according routing tables ahead of time.
+However, computing all possible failures requirers a lot of storage (>1GB).
+We thus only precompute common failure scenarios and compute the others at 
+runtime if necessary.
 
-Whenever a failure is detected, the switch will temporarily re-route the packets over a Loop Free Alternative switch (LFA).
+Failure detections work by sending (lazy) heartbeats on all individual links.
+We allow normal packets to also function as heartbeats (we call this lazy 
+heartbeats).We thus only send heartbeats when there is no other traffic on a 
+link.
+
+Whenever a failure is detected, the switch will temporarily re-route the packets 
+over a Loop Free Alternative switch (LFA).
 If this is not possible, it will use a remote LFA.
-The controller, in the meantime, fetches the precomputed or computes the new routing table and updates the switch.
+The controller, in the meantime, fetches the precomputed or computes the new 
+routing table and updates the switch.
 
 
 ## Individual Contributions
