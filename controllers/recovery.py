@@ -1,12 +1,12 @@
 """ Define classes and methods for links failure recovery here"""
 from networkx.algorithms import all_pairs_dijkstra, bridges
-from networkx.algorithms.shortest_paths.generic import shortest_path,all_shortest_paths, shortest_path_length
+from networkx.algorithms.shortest_paths.generic import all_shortest_paths, shortest_path_length
+from networkx.algorithms.shortest_paths.weighted import all_pairs_dijkstra_path_length
 from p4utils.utils.topology import NetworkGraph as Graph
 from p4utils.utils.helper import load_topo
 from scapy.all import *
 import json
 import os
-from pickle import loads, dumps
 import sys
 
 from errors import *
@@ -74,11 +74,16 @@ class Fast_Recovery_Manager(object):
     @staticmethod
     def add_delay_weight(g: Graph):
         #transform delay from string to float
-        for e in g.edges:
-            try:
-                g[e[0]][e[1]]['delay_w'] = float(g[e[0]][e[1]]['delay'].replace('ms','')) + SETTINGS["switch_delay"]
-            except:
+        if SETTINGS["use_edge_delay"]:
+            for e in g.edges:
+                try:
+                    g[e[0]][e[1]]['delay_w'] = float(g[e[0]][e[1]]['delay'].replace('ms','')) + SETTINGS["switch_delay"]
+                except:
+                    g[e[0]][e[1]]['delay_w'] = float(1.0)
+        else:
+            for e in g.edges:
                 g[e[0]][e[1]]['delay_w'] = float(1.0)
+
     
     @staticmethod
     def parse_failures(failures: List[str]) -> List[Tuple[str, str]]:
@@ -194,7 +199,7 @@ class Fast_Recovery_Manager(object):
             failures (list(tuple(str, str))): List of failed links.
 
         Returns:
-            tuple(dict, dict): First dict: distances (delay in ms), second: paths.
+            tuple(dict, dict): First dict: costs (delay in ms), second: paths.
         """
         if failures is not None:
             graph = graph.copy()
@@ -202,10 +207,8 @@ class Fast_Recovery_Manager(object):
                 graph.remove_edge(*failure)
 
         paths = {}
-        distances = {}
         for sw in graph.get_p4switches().keys():
             paths[sw] = {}
-            distances[sw] = {}
             d = {}
             p = {}
             for h in graph.get_hosts().keys():
@@ -218,17 +221,8 @@ class Fast_Recovery_Manager(object):
                         nexthops.add(path[1])
                         ecmps.append(path)
                 paths[sw][h] = ecmps
-                #if len(paths[sw][h]) > 1:
-                    #print(f"ECMP PATH {sw}->{h}\nNexthops:\n")
-                    #for path in paths[sw][h]:
-                    #    print("-"+path[1]+"\n")
-                distances[sw][h] = shortest_path_length(graph, sw, h, 'delay_w')
-            #add distances between switches
-            for sw2 in graph.get_p4switches().keys():
-                if sw == sw2:
-                    continue
-                distances[sw][sw2] = shortest_path_length(graph, sw2, h, 'delay_w')
-        return distances, paths
+        costs = dict(all_pairs_dijkstra_path_length(graph, weight='delay_w'))
+        return costs, paths
 
     @staticmethod
     def compute_nexthops(shortest_paths, switches, hosts, failures=None):
@@ -264,7 +258,7 @@ class Fast_Recovery_Manager(object):
         return results
 
     @staticmethod
-    def compute_lfas(graph: Graph, switches, hosts, distances, nexthops, failures=None):
+    def compute_lfas(graph: Graph, switches, hosts, costs, nexthops, failures=None):
         """
         Compute per-destination LFA  for all nexthops.
         
@@ -292,8 +286,8 @@ class Fast_Recovery_Manager(object):
                 loop_free = []
                 for alt in alt_neighs:
                     # D(N, D) < D(N, S) + D(S, D) triangle condition
-                    if (distances[alt][host] < distances[alt][sw] + distances[sw][host]):
-                        total_dist = distances[sw][alt] + distances[alt][host]
+                    if (costs[alt][host] < costs[alt][sw] + costs[sw][host]):
+                        total_dist = costs[sw][alt] + costs[alt][host]
                         loop_free.append((alt, total_dist))
 
                 if not loop_free:
@@ -306,7 +300,7 @@ class Fast_Recovery_Manager(object):
         return lfas
 
     @staticmethod
-    def compute_Rlfas(graph: Graph, switches, nexthops, lfas, failures=None):
+    def compute_Rlfas(graph: Graph, switches, costs, nexthops, lfas, failures=None):
         """
         Implements the PQ algorithm for Remote LFAs
          
@@ -378,8 +372,8 @@ class Fast_Recovery_Manager(object):
 
                 #take the alternative with shortest metric
                 if len(PQ) > 1:
-                    distances = [shortest_path_length(graph, sw, n, weight='delay_w') for n in PQ]
-                    sorted_alt = [x for _,x in sorted(zip(distances, PQ))]
+                    metric = [costs[sw][n] for n in PQ]
+                    sorted_alt = [x for _,x in sorted(zip(metric, PQ))]
                     Rlfas[sw][neigh] = sorted_alt[0]
                 elif len(PQ) == 1:
                     Rlfas[sw][neigh] = PQ[0]
@@ -399,13 +393,13 @@ class Fast_Recovery_Manager(object):
         return all_failures
 
     @staticmethod
-    def compute_scmps(lfas: Dict[str, Dict[str, List[str]]], distances: Dict[str, Dict[str, int]], threshold: int = 5) -> Dict[str, Dict[str, List[str]]]:
+    def compute_scmps(lfas: Dict[str, Dict[str, List[str]]], costs: Dict[str, Dict[str, int]], threshold: int = 5) -> Dict[str, Dict[str, List[str]]]:
         """
         Find which LFAs can be used as SCMP paths.
 
         Args:
             lfas: Already computed lfas for all the switches (dict[switch, dict[destination, port]])
-            distances: shortest path distances between all nodes (dict[src, dict[dest, distance]])
+            costs: shortest path costs between all nodes (dict[src, dict[dest, distance]])
             threshold: Threshold of added delay by using LFA over shortest path (at this hop) in ms
         Returns:
             SCMP next hops for src and destination. 
@@ -414,9 +408,9 @@ class Fast_Recovery_Manager(object):
         for src, dests in lfas.items():
             scmps[src] = {}
             for dst, lfas in dests.items():
-                delay_shortest = distances[src][dst]
+                delay_shortest = costs[src][dst]
                 def is_cheap_enough(lfa):
-                    delay_scmp = distances[src][lfa] + distances[lfa][dst]
+                    delay_scmp = costs[src][lfa] + costs[lfa][dst]
                     diff = (delay_scmp - delay_shortest)
                     # if diff < threshold:
                     #     print(f"{src} - {dst}: {lfa} {delay_shortest} {delay_scmp}")
@@ -434,11 +428,11 @@ class Fast_Recovery_Manager(object):
         """
         
         #dijkstra handles removing the failed links here
-        distances, shortest_paths = Fast_Recovery_Manager.dijkstra(graph, failures)
+        costs, shortest_paths = Fast_Recovery_Manager.dijkstra(graph, failures)
         nexthops = Fast_Recovery_Manager.compute_nexthops(shortest_paths, switches, hosts, failures)
-        lfas = Fast_Recovery_Manager.compute_lfas(graph, switches, hosts, distances, nexthops, failures)
-        sim_cost_paths = Fast_Recovery_Manager.compute_scmps(lfas, distances, SETTINGS["scmp_threshold"])
-        Rlfas = Fast_Recovery_Manager.compute_Rlfas(graph, switches, nexthops, lfas, failures)
+        lfas = Fast_Recovery_Manager.compute_lfas(graph, switches, hosts, costs, nexthops, failures)
+        sim_cost_paths = Fast_Recovery_Manager.compute_scmps(lfas, costs, SETTINGS["scmp_threshold"])
+        Rlfas = Fast_Recovery_Manager.compute_Rlfas(graph, switches, costs, nexthops, lfas, failures)
         
         routing_tbl = {}
         for sw in switches:
@@ -466,11 +460,11 @@ class Fast_Recovery_Manager(object):
         """
         
         #dijkstra handles removing the failed links here
-        distances, shortest_paths = Fast_Recovery_Manager.dijkstra(graph, failures)
+        costs, shortest_paths = Fast_Recovery_Manager.dijkstra(graph, failures)
         nexthops = Fast_Recovery_Manager.compute_nexthops(shortest_paths, switches, hosts, failures)
-        lfas = Fast_Recovery_Manager.compute_lfas(graph, switches, hosts, distances, nexthops, failures)
-        sim_cost_paths = Fast_Recovery_Manager.compute_scmps(lfas, distances, SETTINGS["scmp_threshold"])
-        Rlfas = Fast_Recovery_Manager.compute_Rlfas(graph, switches, nexthops, lfas, failures)
+        lfas = Fast_Recovery_Manager.compute_lfas(graph, switches, hosts, costs, nexthops, failures)
+        sim_cost_paths = Fast_Recovery_Manager.compute_scmps(lfas, costs, SETTINGS["scmp_threshold"])
+        Rlfas = Fast_Recovery_Manager.compute_Rlfas(graph, switches, costs, nexthops, lfas, failures)
         
         routing_tbl = {}
         for sw in switches:

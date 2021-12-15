@@ -260,7 +260,13 @@ control MyIngress(inout headers hdr,
       }
     }
   }
-
+    /*
+    This table applies the last final logic. It presumes the packet has already the egress
+    port set to the right next hop for the dest, and lfas ports already set if any.
+    
+    It loads the Rlfa for the link we are going to use (if any) and checks if the nexthop link is
+    still up. Otherwise, it will try the lfas first and then the Rlfa
+    */
   table final_forward{
     key = {
         std_meta.egress_spec: exact;
@@ -535,8 +541,7 @@ control MyIngress(inout headers hdr,
             std_meta.ingress_global_timestamp - flowlet_last_dropped_stamp;
           // If the drop is longer than DROP_FLOWLET_TIMEOUT ago, possibly allow 
           // a new drop on this flow.
-          // is this right? should not be drop time diff > TIMEOUT? 
-          if (flowlet_last_dropped_stamp > DROP_FLOWLET_TIMEOUT) {
+          if (flowlet_drop_time_diff > DROP_FLOWLET_TIMEOUT) {
             flowlet_dropped.write((bit<32>)flowlet_register_index, 0);
           }
         } else {

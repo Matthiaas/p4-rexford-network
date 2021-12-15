@@ -124,7 +124,8 @@ class RoutingTableManager(object):
                 
             #set Rlfas
             for neigh, rlfa in Rlfas[p4switch].items():
-                # Rlfa protects the link sw--neigh 
+                # Rlfa protects the link sw--neigh
+                rlfa_port = 0
                 if rlfa != "":
                     # This is the port to protect
                     link_port = self.topo.node_to_node_port_num(p4switch, neigh)
@@ -132,18 +133,18 @@ class RoutingTableManager(object):
                     rlfa_host = RexfordUtils.get_rexford_addr(
                         self.topo, RexfordUtils.get_host_of_switch(rlfa))
                     rlfa_host_nexthops = rt[RexfordUtils.get_host_of_switch(rlfa)]["nexthops"]
-                    rlfa_port = 0
                     for nh in rlfa_host_nexthops:
                         # Clearly has to be different than the neighbor for which the link fails.
                         if nh != neigh:
                             rlfa_port = self.topo.node_to_node_port_num(p4switch, nh)
                             break
                     print(f"Adding Rlfa link {p4switch}--{neigh} rlfa: {rlfa} port: {rlfa_port}")
-                    self.__modify_or_add(cont=cont,
-                            table_name="final_forward",
-                            action_name="set_backup_rts",
-                            match_keys=[str(link_port)],
-                            action_params=[rlfa_host, str(rlfa_port)])
+                #decoy rlfa is 0
+                self.__modify_or_add(cont=cont,
+                        table_name="final_forward",
+                        action_name="set_backup_rts",
+                        match_keys=[str(link_port)],
+                        action_params=[rlfa_host, str(rlfa_port)])
             
             print("Loaded routing tables for ", p4switch)
                            

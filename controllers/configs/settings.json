@@ -1,12 +1,13 @@
 {
-    "committed_queue_length": 25,
-    "committed_rate": 1,
-    "peak_queue_length":25,
-    "peak_rate": 1.25,
-    "packet_size": 1600,
-    "heartbeat_freq": 0.0012,
-    "rt_manager_freq": 0.1,
-    "queue_len_estimator_sample_freq": 0.0001,
-    "scmp_threshold": 15,
-    "switch_delay": 15.0
+    "committed_queue_length":           25,
+    "committed_rate":                   1,
+    "peak_queue_length":                25,
+    "peak_rate":                        1.25,
+    "packet_size":                      1600,
+    "heartbeat_freq":                   0.0012,
+    "rt_manager_freq":                  0.1,
+    "queue_len_estimator_sample_freq":  0.0001,
+    "use_edge_delay":                   false,
+    "scmp_threshold":                   10000,
+    "switch_delay":                     10000
 }
