@@ -75,11 +75,16 @@ class Fast_Recovery_Manager(object):
     @staticmethod
     def add_delay_weight(g: Graph):
         #transform delay from string to float
-        for e in g.edges:
-            try:
-                g[e[0]][e[1]]['delay_w'] = float(g[e[0]][e[1]]['delay'].replace('ms','')) + SETTINGS["switch_delay"]
-            except:
+        if SETTINGS["use_edge_delay"]:
+            for e in g.edges:
+                try:
+                    g[e[0]][e[1]]['delay_w'] = float(g[e[0]][e[1]]['delay'].replace('ms','')) + SETTINGS["switch_delay"]
+                except:
+                    g[e[0]][e[1]]['delay_w'] = float(1.0)
+        else:
+            for e in g.edges:
                 g[e[0]][e[1]]['delay_w'] = float(1.0)
+
     
     @staticmethod
     def parse_failures(failures: List[str]) -> List[Tuple[str, str]]:

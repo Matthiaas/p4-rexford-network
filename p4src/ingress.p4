@@ -539,7 +539,7 @@ control MyIngress(inout headers hdr,
             std_meta.ingress_global_timestamp - flowlet_last_dropped_stamp;
           // If the drop is longer than DROP_FLOWLET_TIMEOUT ago, possibly allow 
           // a new drop on this flow.
-          if (flowlet_last_dropped_stamp > DROP_FLOWLET_TIMEOUT) {
+          if (flowlet_drop_time_diff > DROP_FLOWLET_TIMEOUT) {
             flowlet_dropped.write((bit<32>)flowlet_register_index, 0);
           }
         } else {
