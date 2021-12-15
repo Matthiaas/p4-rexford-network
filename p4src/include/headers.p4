@@ -51,7 +51,7 @@ struct metadata {
   port_t srcPort;
   port_t dstPort;
 
-  // Flowlet
+  // ESCMP stuff.
   bit<16> escmp_nhop_id;
   bit<14> escmp_group_id;
   bool    scmp_new_split;
@@ -76,7 +76,7 @@ header ethernet_t {
 
 header heartbeat_t {
   bit<9> port;
-  bit<1> from_cp;
+  bit<1> from_control_plane;
   bit<1> failed_link;
   bit<1> recovered_link;
   bit<84> padding;

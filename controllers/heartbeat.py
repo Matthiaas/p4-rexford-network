@@ -25,10 +25,10 @@ class HeartBeatGenerator(object):
     def __build_packet(self, heartbeat_port):
         """Builds raw heart beat packet to send to switches"""
         heartbeat_port = format(heartbeat_port, '09b')
-        from_cp = '1'
+        from_control_plane = '1'
         pad = '0' * 86
         eth = format(0x1234, '016b')
-        pkt = heartbeat_port + from_cp + pad + eth
+        pkt = heartbeat_port + from_control_plane + pad + eth
         pkt = int(pkt, 2).to_bytes(14, byteorder='big')
         heartbeat = struct.pack("!14s", pkt)
         return heartbeat
