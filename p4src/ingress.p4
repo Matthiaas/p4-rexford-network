@@ -583,7 +583,7 @@ control MyIngress(inout headers hdr,
       // 0% than 98% if the SLA is 99%.
       // Comment out this line when you want the thing to work for general
       // traffic.
-      #include "leader_board_opt.p4"
+      //#include "leader_board_opt.p4"
 
       random_early_detection();
       
