@@ -164,8 +164,9 @@ control MyEgress(inout headers hdr,
       estimate_queue_len_v2();
     }
     if (hdr.heartbeat.isValid()){
-      log_msg("HB Egress: port {} f {} r {} cloned {}",
+      log_msg("HB Egress: time {} port {} f {} r {} cloned {}",
         {
+          std_meta.egress_global_timestamp,
           hdr.heartbeat.port, 
           hdr.heartbeat.failed_link, 
           hdr.heartbeat.recovered_link, 

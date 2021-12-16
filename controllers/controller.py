@@ -21,7 +21,7 @@ TABLES = ["ipv4_forward", "escmp_group_to_nhop", "final_forward"]
 
 class Controller(object):
     def __init__(self, base_traffic, slas):
-
+        self.clock = time.perf_counter()
         self.base_traffic_file = base_traffic
         self.topo = load_topo("topology.json")
         FRM.add_delay_weight(self.topo)
@@ -181,6 +181,8 @@ class Controller(object):
         pkt_bin = format(int.from_bytes(pkt_raw, byteorder="big"), "0112b")
         eth_type = int(pkt_bin[-16:], 2)
         if eth_type == 4661:
+            clock = time.perf_counter()
+            chrono = clock - self.clock
             port = int(pkt_bin[0:9], 2)
             failed = int(pkt_bin[10], 2)
             recovered = int(pkt_bin[11], 2)
@@ -188,10 +190,10 @@ class Controller(object):
             failed_link = tuple(sorted([switch_name, neighbor]))
             print(f"[!] Heartbeat: {switch_name} {neighbor} {port}")
             if failed == 1:
-                print("Notification for link failure {} received", format(failed_link))
+                print(f"TIME {chrono}-Notification for link failure {failed_link} received")
                 self.rt_manager.fail_link(failed_link)
             if recovered == 1:
-                print("Notification for link restored {} received", format(failed_link))
+                print(f"TIME {chrono}-Notification for link restored {failed_link} received")
                 self.rt_manager.restore_link(failed_link)
 
     def run_cpu_port_loop(self):
@@ -201,6 +203,7 @@ class Controller(object):
             for sw_name in self.controllers
         ]
         print(f"Sniffing interfaces: {cpu_interfaces}")
+        self.clock = time.perf_counter()
         sniff(
             iface=cpu_interfaces, filter="ether proto 0x1235", prn=self.process_packet
         )

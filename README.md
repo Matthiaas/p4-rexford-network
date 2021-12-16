@@ -13,13 +13,13 @@
 
 We implement dynamic failure aware routing and support routing table
 calculations using either delay or number of hops as a weight metric.
-To avoid congestion switches use local load-balancing by means of flowlets
+To avoid congestion switches we use local load-balancing by means of flowlets
 and Equal Cost Multi-Path (ECMP).
 We also implemented Similar Cost Paths (SCMP) to distribute the load even
 further over the network.
 
 To handle congestion in the network, the switches will use Random Early
-Detection and drop packets and avoid TCP synchronisation.
+Detection to drop packets and avoid TCP synchronisation.
 This is based on a queue length estimator using meters and counters that
 approximates the queue length of each link behind the switch.
 We also implement additional
@@ -49,10 +49,10 @@ routing table and updates the switch.
 In this section, note down 1 or 2 sentences *per team member* outlining everyone's contribution to the project. We want to see that everybody contributed, but you don't need to get into fine details. For example, write who contributed to which feature of your solution, but do *not* write who implemented a particular function. 
 
 ### Francesco Intoci
-- Routing table computation, including first version of ECMP paths.
+- Routing table computation with ECMP paths.
 - Implementation of per-destination LFAs.
 - Implementation of PQ algorithm for RLFAs.
-- Failure detection and recovery through heartbeat messages.
+- Failure detection and recovery through (lazy) heartbeats.
 
 ### Westermann Floris
 - Precomputation of Failure Configurations.
