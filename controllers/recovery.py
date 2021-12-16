@@ -60,7 +60,7 @@ class Fast_Recovery_Manager(object):
         with open(config_file, "r") as f:
             m = json.load(f)["map"]
             for entry in m:
-                failures = frozenset(entry["failures"])
+                failures = frozenset([tuple(x.split("-")) for x in entry["failures"]])
                 failure_rts[failures] = entry["routing_tbl"]
                 failure_rlfas[failures] = entry["Rlfas"]
         return failure_rts, failure_rlfas
