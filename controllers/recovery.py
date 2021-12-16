@@ -479,6 +479,8 @@ def main(argv, argc):
         all_failures = [[]]
     else:
         all_failures = failure_generator.load_failures(failure_path)
+        if not [] in all_failures:
+            all_failures.append([])
     Fast_Recovery_Manager.add_delay_weight(graph)
     Fast_Recovery_Manager.precompute_routing(
         graph, graph.get_p4switches().keys(), graph.get_hosts().keys(), all_failures

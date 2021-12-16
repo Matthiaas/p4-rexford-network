@@ -200,7 +200,7 @@ def generate_most_likely_failures(graph: Graph, failure_in_dir: str, additional_
                 failures.append(failure)
         all_failures.update(calc_failure_scenarios(failures))
 
-    possible_failures = []
+    possible_failures = [[]]
     for x in all_failures:
         links = list(x)
         links_tuples = [tuple(f.split("-")) for f in links]

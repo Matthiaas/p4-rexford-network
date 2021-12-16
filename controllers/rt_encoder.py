@@ -37,7 +37,7 @@ vertex_names = [
 
 
 def encode_edge(e):
-    return int(vertex_names.index(e[0])) << 5 + int(vertex_names.index(e[1]))
+    return (int(vertex_names.index(e[0])) << 5) + int(vertex_names.index(e[1]))
 
 
 def decode_edge(e: int):
