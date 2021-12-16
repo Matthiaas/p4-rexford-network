@@ -10,7 +10,6 @@ import json
 import os
 import sys
 import failure_generator
-import rt_encoder
 from errors import *
 from typing import List, Set, Tuple, Dict
 
@@ -59,10 +58,11 @@ class Fast_Recovery_Manager(object):
         failure_rts = {}
         failure_rlfas = {}
         with open(config_file, "r") as f:
-            for entry in json.load(f)["map"]:
-                failures = frozenset([rt_encoder.decode_edge(f) for f in entry["f"]])
-                failure_rts[failures] = entry["t"]
-                failure_rlfas[failures] = entry["R"]
+            m = json.load(f)["map"]
+            for entry in m:
+                failures = frozenset(entry["failures"])
+                failure_rts[failures] = entry["routing_tbl"]
+                failure_rlfas[failures] = entry["Rlfas"]
         return failure_rts, failure_rlfas
 
     def __init__(self, topo: Graph, links_fail_file: str):
@@ -408,8 +408,8 @@ class Fast_Recovery_Manager(object):
             if not all_failures:
                 all_failures = [None]
             for failures in all_failures:
-                scenario = rt_encoder.form_routing_enc(
-                    graph, switches, hosts, SETTINGS["scmp_threshold"], failures
+                scenario = Fast_Recovery_Manager.__form_routing(
+                    graph, switches, hosts, failures
                 )
                 scenarios.append(scenario)
             map["map"] = scenarios
@@ -424,8 +424,8 @@ class Fast_Recovery_Manager(object):
     def query_routing_state(self, failures=[]):
         """Called by controller to retrieve routing state given failures"""
         try:
-            rt = rt_encoder.decode_routing_table(self.failure_rts[frozenset(failures)])
-            rlfa = rt_encoder.decode_rlfas(self.failures_rlfas[frozenset(failures)])
+            rt = self.failure_rts[frozenset(failures)]
+            rlfa = self.failures_rlfas[frozenset(failures)]
             print(
                 f"Recovery: loaded routing tables and rlfas from config for failures {failures}"
             )
