@@ -1,7 +1,8 @@
 """ Define classes and methods for links failure recovery here"""
+from networkx import NetworkXNoPath
 from networkx.algorithms import all_pairs_dijkstra, bridges
 from networkx.algorithms.shortest_paths.generic import all_shortest_paths
-from networkx.algorithms.shortest_paths.weighted import all_pairs_dijkstra_path_length
+from networkx.algorithms.shortest_paths.weighted import _dijkstra, all_pairs_dijkstra_path_length
 from p4utils.utils.topology import NetworkGraph as Graph
 from p4utils.utils.helper import load_topo
 from scapy.all import *
@@ -42,17 +43,6 @@ class Fast_Recovery_Manager(object):
         else:
             for e in g.edges:
                 g[e[0]][e[1]]["delay_w"] = float(1.0)
-
-    @staticmethod
-    def parse_failures(failures: List[str]) -> List[Tuple[str, str]]:
-        """
-        Takes failures like ["s1-s2", "s2-s3"] and returns [(s1,s2),(s2,s3)]
-        """
-        f = []
-        for link in failures:
-            nodes = link.split("-")
-            f.append((nodes[0], nodes[1]))
-        return f
 
     @staticmethod
     def __load_link_fail_map(config_file: str):
@@ -112,30 +102,49 @@ class Fast_Recovery_Manager(object):
         Returns:
             tuple(dict, dict): First dict: costs (delay in ms), second: paths.
         """
+        _graph = graph.copy()
         if failures is not None:
-            graph = graph.copy()
             for failure in failures:
-                graph.remove_edge(*failure)
+                _graph.remove_edge(*failure)
 
-        paths = {}
-        for sw in graph.get_p4switches().keys():
-            paths[sw] = {}
-            d = {}
-            p = {}
-            for h in graph.get_hosts().keys():
-                # add only path with different first hop
-                all_paths = [
-                    path for path in all_shortest_paths(graph, sw, h, "delay_w")
-                ]
-                nexthops = set()
-                ecmps = []
-                for path in all_paths:
-                    if path[1] not in nexthops:
-                        nexthops.add(path[1])
-                        ecmps.append(path)
-                paths[sw][h] = ecmps
-        costs = dict(all_pairs_dijkstra_path_length(graph, weight="delay_w"))
-        return costs, paths
+        try:
+            paths = {}
+            for sw in _graph.get_p4switches().keys():
+                paths[sw] = {}
+                d = {}
+                p = {}
+                for h in _graph.get_hosts().keys():
+                    # add only path with different first hop
+                    all_paths = [
+                        path for path in all_shortest_paths(_graph, sw, h, "delay_w")
+                    ]
+                    nexthops = set()
+                    ecmps = []
+                    for path in all_paths:
+                        if path[1] not in nexthops:
+                            nexthops.add(path[1])
+                            ecmps.append(path)
+                    paths[sw][h] = ecmps
+            costs = dict(all_pairs_dijkstra_path_length(_graph, weight="delay_w"))
+            return costs, paths
+        except NetworkXNoPath:
+            # It might happen that we detect a failure configuration that would disconnect the graph.
+            # This is not supposed to happen in the project.
+            # However, if it does occur we use a best effort approach and just remove violating failures.
+            # (The removed failures are not guaranteed to be minimal).
+            print("Failure combination disconnects Graph: ", failures)
+            if failures is None:
+                raise NetworkXNoPath("Graph is inherently flawed... NONONONONO")
+            _graph = graph.copy()
+            new_failures = []
+            for failure in failures:
+                if not failure in list(bridges(_graph)):
+                    _graph.remove_edge(*failure)
+                    new_failures.append(failure)
+
+            print("Recomputing with failures: ", new_failures)
+            return Fast_Recovery_Manager.dijkstra(_graph, None)
+
 
     @staticmethod
     def compute_nexthops(shortest_paths, switches, hosts):
@@ -433,31 +442,50 @@ class Fast_Recovery_Manager(object):
 
 def main(argv, argc):
     no_failures = False
-    generate_failures = False
+    generate_all_failures = False
     args = argv[1:]
+    links_file_path = ""
+    likely_failures_dir = ""
+
     if "--no-failures" in args:
         no_failures = True
-    elif "--generate-failures" in args:
-        generate_failures = True
+    elif "--generate-all-failures" in args:
+        generate_all_failures = True
+    elif "--generate-likely-failures" in args:
+        for arg in args:
+            if arg.startswith("-l="):
+                links_file_path = arg[3:]
+            if arg.startswith("-f="):
+                likely_failures_dir = arg[3:]
+        if not links_file_path or not likely_failures_dir:
+            print("please specify -l= and -f= flags.")
+            exit(-1)
+        generate_likely_failures = True
+
     if "-h" in args:
-        print("Usage: python ./recovery.py [--no-failures] [--generate-failures]")
+        print("Usage: python ./recovery.py [--no-failures] [--generate-all-failures] [--generate-likely-failures -l=<path_to_additional_links> -f=<path_to_failures_dir>]")
         exit()
 
     print("[*] Generating Configurations...")
     graph = load_topo("../topology.json")
     failure_path = "./configs/failures_generated.json"
     # done
-    if generate_failures:
+    if generate_all_failures:
         failure_generator.generate_possible_failures(graph, failure_path)
+    if generate_likely_failures:
+        failure_generator.generate_most_likely_failures(graph, likely_failures_dir, links_file_path, failure_path)
     print("[*] Failures computed, computing routing scenarios...")
     if no_failures:
         all_failures = [[]]
     else:
         all_failures = failure_generator.load_failures(failure_path)
+        if not [] in all_failures:
+            all_failures.append([])
     Fast_Recovery_Manager.add_delay_weight(graph)
     Fast_Recovery_Manager.precompute_routing(
         graph, graph.get_p4switches().keys(), graph.get_hosts().keys(), all_failures
     )
+    print("...done")
 
 
 if __name__ == "__main__":
