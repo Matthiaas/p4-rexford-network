@@ -44,17 +44,6 @@ class Fast_Recovery_Manager(object):
                 g[e[0]][e[1]]["delay_w"] = float(1.0)
 
     @staticmethod
-    def parse_failures(failures: List[str]) -> List[Tuple[str, str]]:
-        """
-        Takes failures like ["s1-s2", "s2-s3"] and returns [(s1,s2),(s2,s3)]
-        """
-        f = []
-        for link in failures:
-            nodes = link.split("-")
-            f.append((nodes[0], nodes[1]))
-        return f
-
-    @staticmethod
     def __load_link_fail_map(config_file: str):
         """
         To be called by controller at runtime after precomputation
@@ -433,22 +422,38 @@ class Fast_Recovery_Manager(object):
 
 def main(argv, argc):
     no_failures = False
-    generate_failures = False
+    generate_all_failures = False
     args = argv[1:]
+    links_file_path = ""
+    likely_failures_dir = ""
+
     if "--no-failures" in args:
         no_failures = True
-    elif "--generate-failures" in args:
-        generate_failures = True
+    elif "--generate-all-failures" in args:
+        generate_all_failures = True
+    elif "--generate-likely-failures" in args:
+        for arg in args:
+            if arg.startswith("-l="):
+                links_file_path = arg[3:]
+            if arg.startswith("-f="):
+                likely_failures_dir = arg[3:]
+        if not links_file_path or not likely_failures_dir:
+            print("please specify -l= and -f= flags.")
+            exit(-1)
+        generate_likely_failures = True
+
     if "-h" in args:
-        print("Usage: python ./recovery.py [--no-failures] [--generate-failures]")
+        print("Usage: python ./recovery.py [--no-failures] [--generate-all-failures] [--generate-likely-failures -l=<path_to_additional_links> -f=<path_to_failures_dir>]")
         exit()
 
     print("[*] Generating Configurations...")
     graph = load_topo("../topology.json")
     failure_path = "./configs/failures_generated.json"
     # done
-    if generate_failures:
+    if generate_all_failures:
         failure_generator.generate_possible_failures(graph, failure_path)
+    if generate_likely_failures:
+        failure_generator.generate_most_likely_failures(graph, likely_failures_dir, links_file_path, failure_path)
     print("[*] Failures computed, computing routing scenarios...")
     if no_failures:
         all_failures = [[]]
@@ -458,6 +463,7 @@ def main(argv, argc):
     Fast_Recovery_Manager.precompute_routing(
         graph, graph.get_p4switches().keys(), graph.get_hosts().keys(), all_failures
     )
+    print("...done")
 
 
 if __name__ == "__main__":
