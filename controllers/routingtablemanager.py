@@ -36,7 +36,7 @@ class RoutingTableManager(object):
         self.lock.acquire()
         if failed_link not in self.failed_links and failed_link in self.non_bridges:
             self.failed_links.add(failed_link)
-            print(f"Updated failed links: {self.failed_links}")
+            print(f"Failure: updated failed links: {self.failed_links}")
             self.has_changed = True
         self.lock.release()
 
@@ -49,6 +49,7 @@ class RoutingTableManager(object):
         self.lock.acquire()
         if restored_link in self.failed_links:
             self.failed_links.remove(restored_link)
+            print(f"Recovery: updated failed links: {self.failed_links}")
             self.has_changed = True
         self.lock.release()
 
