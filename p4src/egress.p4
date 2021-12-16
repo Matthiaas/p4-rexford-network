@@ -115,8 +115,6 @@ control MyEgress(inout headers hdr,
 
     hdr.ipv4.src_network      = 0x0A00;
     hdr.ipv4.src_rexford_addr = (bit<8>) hdr.rexford_ipv4.srcAddr;
-    // TODO: This is an awful hack. We should either use tables or use 5 bit as 
-    // addresses or so.
     if (hdr.ipv4.src_rexford_addr == 0) {
       hdr.ipv4.src_rexford_addr = 16;
     }
@@ -124,8 +122,6 @@ control MyEgress(inout headers hdr,
     
     hdr.ipv4.dst_network      = 0x0A00;
     hdr.ipv4.dst_rexford_addr = (bit<8>) hdr.rexford_ipv4.dstAddr;
-    // TODO: This is an awful hack. We should either use tables or use 5 bit as 
-    // addresses or so.
     if (hdr.ipv4.dst_rexford_addr == 0) {
       hdr.ipv4.dst_rexford_addr = 16;
     }
@@ -147,7 +143,8 @@ control MyEgress(inout headers hdr,
   apply {
     host_port_to_mac.apply();
     if (std_meta.instance_type == 1){
-      //cloned -> make it heartbeat
+      // This is a cloned packet. Make it a heartbeat such that the control
+      // plane can recognize it as one.
       hdr.ethernet.setInvalid();
       hdr.ipv4.setInvalid();
       hdr.waypoint.setInvalid();

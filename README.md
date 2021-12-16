@@ -18,7 +18,7 @@ and Equal Cost Multi-Path (ECMP).
 We also implemented Similar Cost Paths (SCMP) to distribute the load even
 further over the network.
 
-To handle congestion in the network, the switches will use Random Earlier
+To handle congestion in the network, the switches will use Random Early
 Detection and drop packets and avoid TCP synchronisation.
 This is based on a queue length estimator using meters and counters that
 approximates the queue length of each link behind the switch.
@@ -55,16 +55,17 @@ In this section, note down 1 or 2 sentences *per team member* outlining everyone
 - Failure detection and recovery through heartbeat messages.
 
 ### Westermann Floris
-- Precomputation of Failure Configurations
-- Initial naive congestion detection using Meters
-- Similar Cost Multi-Path routing
+- Precomputation of Failure Configurations.
+- Initial naive congestion detection using Meters.
+- Similar Cost Multi-Path routing.
+- Experimental Parameter Tuning for SCMP (Conclusion: Fewest Hop routing reigns supreme).
 
 ### Bungeroth Matthias
 
 - Parsing/ Deparsing of headers to internal headers without ethernet (at entry/ exit ports).
 - Waypointing for UDP waypointed traffic.
-- First version ECMP-flowlet routing
-- TCP Global Synchronization Protection based on this [paper](https://www.researchgate.net/publication/301857331_Global_Synchronization_Protection_for_Bandwidth_Sharing_TCP_Flows_in_High-Speed_Links)
-- Queue-length estimator
-- QOS with Random Early Detection based on priorities.
+- First version ECMP-flowlet routing.
+- TCP Global Synchronization Protection based on this [paper](https://www.researchgate.net/publication/301857331_Global_Synchronization_Protection_for_Bandwidth_Sharing_TCP_Flows_in_High-Speed_Links).
+- Meter and Counter based queue length estimators.
+- QOS with Random Early Detection based on estimated queue length.
 
