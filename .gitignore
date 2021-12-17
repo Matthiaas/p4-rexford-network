@@ -5,3 +5,4 @@ outputs/
 *.p4i
 switch.json
 topology.json
+./tests

@@ -443,6 +443,7 @@ class Fast_Recovery_Manager(object):
 def main(argv, argc):
     no_failures = False
     generate_all_failures = False
+    generate_likely_failures = False
     args = argv[1:]
     links_file_path = ""
     likely_failures_dir = ""
